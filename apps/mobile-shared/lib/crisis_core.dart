@@ -1,0 +1,7 @@
+/// Shared client logic for the citizen and responder apps.
+library crisis_core;
+
+export 'src/api_client.dart';
+export 'src/models.dart';
+export 'src/offline_queue.dart';
+export 'src/secure_store.dart';

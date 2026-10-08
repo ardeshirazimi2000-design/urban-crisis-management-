@@ -1,0 +1,16 @@
+name: crisis_core
+description: Shared client logic for the urban crisis mobile apps (API client, encrypted offline queue, idempotent sync).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  http: ^1.2.2
+  cryptography: ^2.7.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  test: ^1.25.8
+  lints: ^4.0.0

@@ -89,6 +89,8 @@ export function IncidentDetailPage() {
   const accepted = usePoll(async () => (can("incident:link_report") ? api<{ items: Report[] }>("GET", "/reports", { query: { status: "accepted", limit: 50 } }) : { items: [] }), 20000);
   const [assess, setAssess] = useState({ severity: "", level: "" });
   const [resId, setResId] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const responders = usePoll(async () => (can("resource:allocate") ? api<{ items: { id: string; display_name: string; busy: boolean }[] }>("GET", "/responders") : { items: [] }), 30000);
   const [repId, setRepId] = useState("");
   const act = useAction();
   if (!d.data) return <Section title="حادثه"><ErrorBox error={d.error} /></Section>;
@@ -154,9 +156,13 @@ export function IncidentDetailPage() {
                   <option key={r.id} value={r.id}>{t(r.type)} — {r.name}{r.stale ? " (موقعیت کهنه)" : ""}</option>
                 ))}
               </select>
+              <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                <option value="">امدادگر مسئول (اختیاری)…</option>
+                {responders.data?.items.map((u) => <option key={u.id} value={u.id}>{u.display_name}{u.busy ? " (در مأموریت)" : ""}</option>)}
+              </select>
               {resId && <ReasonAction label="تخصیص" onSubmit={async (reason) => {
-                await api("POST", `/incidents/${id}/assignments`, { body: { resource_id: resId, reason } });
-                setResId(""); await d.reload(); await resources.reload();
+                await api("POST", `/incidents/${id}/assignments`, { body: { resource_id: resId, reason, assignee_id: assignee || undefined } });
+                setResId(""); setAssignee(""); await d.reload(); await resources.reload();
               }} />}
             </div>
           )}

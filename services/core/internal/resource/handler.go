@@ -35,6 +35,7 @@ func (m *Module) Routes(r *httpx.Router) {
 	r.Auth("POST /resources/{id}/status", m.setStatus)
 	r.Auth("POST /incidents/{id}/assignments", m.assign)
 	r.Auth("GET /assignments/mine", m.mine)
+	r.Auth("GET /responders", m.responders)
 	r.Auth("POST /assignments/{id}/status", m.assignmentStatus)
 }
 
@@ -521,4 +522,34 @@ func (m *Module) assignmentStatus(w http.ResponseWriter, r *http.Request) error 
 	}
 	httpx.JSON(w, http.StatusOK, out)
 	return nil
+}
+
+// responders lists active users holding the RESPONDER role, so allocators can name who carries out a mission.
+func (m *Module) responders(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	if err := m.Guard.Require(ctx, auth.ResourceAllocate, "user", ""); err != nil {
+		return err
+	}
+	rows, err := m.Pool.Query(ctx, `SELECT DISTINCT u.id, u.display_name, ur.scope_org_id,
+		EXISTS (SELECT 1 FROM assignments a WHERE a.assignee_id = u.id AND a.status = ANY($1)) AS busy
+		FROM users u JOIN user_roles ur ON ur.user_id = u.id
+		WHERE ur.role_code = 'RESPONDER' AND u.status = 'active' AND (ur.expires_at IS NULL OR ur.expires_at > now())
+		ORDER BY u.display_name LIMIT 500`, ActiveAssignmentStatuses)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id uuid.UUID
+		var name string
+		var org *uuid.UUID
+		var busy bool
+		if err := rows.Scan(&id, &name, &org, &busy); err != nil {
+			return err
+		}
+		items = append(items, map[string]any{"id": id, "display_name": name, "organization_id": org, "busy": busy})
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": items})
+	return rows.Err()
 }
