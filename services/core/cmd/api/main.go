@@ -68,11 +68,17 @@ func run() error {
 		pub := app.NewPublisher(cfg)
 		defer pub.Close()
 		wg.Add(1)
-		go func() { defer wg.Done(); _ = (&outbox.Relay{Pool: pool, Pub: pub, TopicPrefix: cfg.TopicPrefix}).Run(workerCtx) }()
+		go func() {
+			defer wg.Done()
+			_ = (&outbox.Relay{Pool: pool, Pub: pub, TopicPrefix: cfg.TopicPrefix}).Run(workerCtx)
+		}()
 	}
 	if b, _ := strconv.ParseBool(os.Getenv("RUN_NOTIFIER")); b {
 		wg.Add(1)
-		go func() { defer wg.Done(); _ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters()}).Run(workerCtx) }()
+		go func() {
+			defer wg.Done()
+			_ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters()}).Run(workerCtx)
+		}()
 	}
 
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: a.Handler, ReadHeaderTimeout: 5 * time.Second,

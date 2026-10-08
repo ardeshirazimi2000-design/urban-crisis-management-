@@ -303,7 +303,7 @@ func (m *Module) preview(w http.ResponseWriter, r *http.Request) error {
 		"rendered_text": a.RenderedText, "channels": perChannel,
 		"region": map[string]any{"label": a.RegionLabel, "area_km2": a.RegionAreaKm2, "centroid": gis.Point{Lat: cLat, Lng: cLng},
 			"bbox": []float64{minX, minY, maxX, maxY}, "geojson": a.Region},
-		"template": map[string]any{"code": a.TemplateCode, "version": a.TemplateVersion},
+		"template":   map[string]any{"code": a.TemplateCode, "version": a.TemplateVersion},
 		"expires_at": a.ExpiresAt, "issuer": a.IssuerName,
 	})
 	return nil

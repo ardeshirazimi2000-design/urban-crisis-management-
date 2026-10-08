@@ -33,7 +33,9 @@ type FieldDetail struct {
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
 
-func NewError(status int, code, msg string) *Error { return &Error{Status: status, Code: code, Message: msg} }
+func NewError(status int, code, msg string) *Error {
+	return &Error{Status: status, Code: code, Message: msg}
+}
 
 var (
 	ErrUnauthenticated = NewError(http.StatusUnauthorized, "UNAUTHENTICATED", "احراز هویت لازم است")

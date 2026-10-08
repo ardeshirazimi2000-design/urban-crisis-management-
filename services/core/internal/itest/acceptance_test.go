@@ -366,7 +366,7 @@ type alertResp struct {
 func draftAlert(t *testing.T, c *client, channels []string) alertResp {
 	var a alertResp
 	c.do("POST", "/alerts", map[string]any{"mode": "test", "severity": "warning", "issuer_org_id": orgID(t, "command"),
-		"region": map[string]any{"type": "Polygon", "coordinates": [][][]float64{{{51.38, 35.69}, {51.42, 35.69}, {51.42, 35.72}, {51.38, 35.72}, {51.38, 35.69}}}},
+		"region":       map[string]any{"type": "Polygon", "coordinates": [][][]float64{{{51.38, 35.69}, {51.42, 35.69}, {51.42, 35.72}, {51.38, 35.72}, {51.38, 35.69}}}},
 		"region_label": "منطقه آزمون", "template_code": "system_test", "template_version": 1, "channels": channels,
 		"expires_at": time.Now().Add(3 * time.Hour).UTC().Format(time.RFC3339)}, idem(), &a, 201)
 	return a

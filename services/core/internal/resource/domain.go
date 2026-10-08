@@ -25,7 +25,9 @@ var assignmentTransitions = map[string][]string{
 
 var ActiveAssignmentStatuses = []string{"proposed", "assigned", "acknowledged", "en_route", "on_scene"}
 
-func CanTransitionAssignment(from, to string) bool { return slices.Contains(assignmentTransitions[from], to) }
+func CanTransitionAssignment(from, to string) bool {
+	return slices.Contains(assignmentTransitions[from], to)
+}
 
 // ResourceStatusFor maps an assignment status to the resource's operational status.
 func ResourceStatusFor(assignmentStatus string) string {

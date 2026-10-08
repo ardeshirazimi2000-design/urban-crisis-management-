@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -63,8 +65,14 @@ func (c *Consumer) Run(ctx context.Context) error {
 	if c.MaxRetries == 0 {
 		c.MaxRetries = 5
 	}
+	// A group reader started before its topic exists never gets partitions assigned; create it up front
+	// and keep watching for partition changes.
+	if err := EnsureTopic(ctx, c.Brokers[0], c.Topic, 3); err != nil {
+		slog.Warn("ensure topic failed", "topic", c.Topic, "err", err.Error())
+	}
 	r := kafka.NewReader(kafka.ReaderConfig{Brokers: c.Brokers, GroupID: c.GroupID, Topic: c.Topic,
-		MinBytes: 1, MaxBytes: 10e6, MaxWait: 500 * time.Millisecond, StartOffset: kafka.FirstOffset})
+		MinBytes: 1, MaxBytes: 10e6, MaxWait: 500 * time.Millisecond, StartOffset: kafka.FirstOffset,
+		WatchPartitionChanges: true, PartitionWatchInterval: 5 * time.Second})
 	defer r.Close()
 	slog.Info("consumer started", "topic", c.Topic, "group", c.GroupID)
 	for {
@@ -125,4 +133,28 @@ func (c *Consumer) deadLetter(ctx context.Context, msg kafka.Message, cause erro
 	if err != nil {
 		slog.Error("dlq write failed", "err", err.Error())
 	}
+}
+
+// EnsureTopic creates the topic if missing (idempotent). Production clusters should pre-provision topics
+// with explicit partitions, replication and ACLs; this keeps local/dev setups self-healing.
+func EnsureTopic(ctx context.Context, broker, topic string, partitions int) error {
+	conn, err := kafka.DialContext(ctx, "tcp", broker)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ctrl, err := conn.Controller()
+	if err != nil {
+		return err
+	}
+	cc, err := kafka.DialContext(ctx, "tcp", net.JoinHostPort(ctrl.Host, strconv.Itoa(ctrl.Port)))
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	err = cc.CreateTopics(kafka.TopicConfig{Topic: topic, NumPartitions: partitions, ReplicationFactor: 1})
+	if err != nil && !errors.Is(err, kafka.TopicAlreadyExists) {
+		return err
+	}
+	return nil
 }

@@ -200,7 +200,7 @@ func (m *Module) grant(w http.ResponseWriter, r *http.Request) error {
 		}
 		return audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: action, TargetType: "user",
 			TargetID: userID.String(), Outcome: "success", Reason: req.Reason,
-			Details: map[string]any{"role": req.Role, "scope_org_id": req.ScopeOrgID, "expires_at": req.ExpiresAt, "grant_id": grantID},
+			Details:       map[string]any{"role": req.Role, "scope_org_id": req.ScopeOrgID, "expires_at": req.ExpiresAt, "grant_id": grantID},
 			CorrelationID: httpx.CorrelationID(ctx)})
 	})
 	if err != nil {
