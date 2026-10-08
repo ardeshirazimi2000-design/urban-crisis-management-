@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alert.expired.v1.json",
+  "title": "alert.expired v1",
+  "description": "Expired before delivery.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "alert.expired"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "alert_id"
+      ],
+      "properties": {
+        "alert_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    }
+  }
+}

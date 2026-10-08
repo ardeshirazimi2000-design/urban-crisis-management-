@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: crisis
+  labels: {app.kubernetes.io/name: api, app.kubernetes.io/part-of: urban-crisis}
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: api}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: api, app.kubernetes.io/part-of: urban-crisis}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8080"}
+    spec:
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: api}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app.kubernetes.io/name: api}}
+      containers:
+        - name: api
+          # Pin by digest in release overlays (immutable images).
+          image: registry.example.invalid/crisis/core:1.0.0
+          command: ["/app/api"]
+          envFrom:
+            - configMapRef: {name: core-config}
+            - secretRef: {name: core-secrets}
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            # Liveness checks only the process (never dependencies) to avoid restart storms.
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api, namespace: crisis, labels: {app.kubernetes.io/name: api}}
+spec:
+  selector: {app.kubernetes.io/name: api}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: api, namespace: crisis}
+spec:
+  minAvailable: 2
+  selector: {matchLabels: {app.kubernetes.io/name: api}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: api, namespace: crisis}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+  behavior:
+    scaleDown: {stabilizationWindowSeconds: 300}

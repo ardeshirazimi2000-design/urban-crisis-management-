@@ -1,0 +1,524 @@
+openapi: 3.1.0
+info:
+  title: Urban Crisis Management — Core API
+  version: 1.0.0
+  description: |
+    REST contract of the core service (modular monolith). Conventions (detailed design §6.1):
+    - Bearer token (OIDC; local dev tokens only with APP_ENV=local). Authorization = permission + organisational scope,
+      resolved server-side; deny-by-default. Hidden resources answer 404.
+    - `Idempotency-Key` is REQUIRED on retryable creates (reports, incidents, alerts, dispatch). Same key + same body
+      replays the stored response (`Idempotent-Replayed: true`); same key + different body → 422 IDEMPOTENCY_KEY_REUSED.
+    - Every response carries `X-Correlation-ID`. Errors use the fixed envelope `ErrorEnvelope`.
+    - Mutations of versioned aggregates require `version` (optimistic locking → 409 VERSION_CONFLICT).
+    - Consequential decisions (reject, transition, cancel, allocation, approval) require a `reason` and are audited.
+    - Times are RFC 3339 UTC. Coordinates are WGS84 (EPSG:4326) decimal degrees.
+servers:
+  - url: /
+tags:
+  - {name: reports}
+  - {name: media}
+  - {name: incidents}
+  - {name: resources}
+  - {name: alerts}
+  - {name: gis}
+  - {name: identity}
+  - {name: admin}
+  - {name: ops}
+security:
+  - bearer: []
+
+paths:
+  /health/live:
+    get: {tags: [ops], security: [], summary: Process liveness only, responses: {"200": {description: alive}}}
+  /health/ready:
+    get:
+      tags: [ops]
+      security: []
+      summary: Readiness (DB reachable, not draining). Kafka/AI/providers are deliberately not dependencies.
+      responses: {"200": {description: ready}, "503": {description: not ready}}
+
+  /api/v1/reports:
+    post:
+      tags: [reports]
+      summary: Submit a report (202 = durably accepted with its outbox event; NOT verified)
+      x-permission: report:create
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/ReportCreate"}}}}
+      responses:
+        "202": {description: accepted, content: {application/json: {schema: {$ref: "#/components/schemas/ReportReceipt"}}}}
+        "400": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+    get:
+      tags: [reports]
+      summary: Operator queue (keyset pagination by received_at)
+      x-permission: report:read
+      parameters:
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/ReportStatus"}}
+        - {name: type, in: query, schema: {$ref: "#/components/schemas/ReportType"}}
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+        - {name: near_lat, in: query, schema: {type: number}}
+        - {name: near_lng, in: query, schema: {type: number}}
+        - {name: radius_m, in: query, schema: {type: number, maximum: 50000}}
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200": {description: page, content: {application/json: {schema: {$ref: "#/components/schemas/ReportPage"}}}}
+        "403": {$ref: "#/components/responses/Error"}
+  /api/v1/reports/mine:
+    get:
+      summary: "GET /reports/mine"
+      tags: [reports]
+      x-permission: report:read_own
+      parameters: [{$ref: "#/components/parameters/Limit"}, {$ref: "#/components/parameters/Cursor"}]
+      responses: {"200": {description: own reports, content: {application/json: {schema: {$ref: "#/components/schemas/ReportPage"}}}}}
+  /api/v1/reports/{id}:
+    get:
+      tags: [reports]
+      summary: Detail incl. media metadata, AI signals (non-authoritative), history and linked incidents
+      x-permission: report:read | owner
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: detail}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/reports/{id}/related:
+    get:
+      tags: [reports]
+      summary: Nearby reports (correlation candidates); nothing is merged automatically
+      x-permission: report:read
+      parameters: [{$ref: "#/components/parameters/Id"}, {name: radius_m, in: query, schema: {type: number, maximum: 5000}}]
+      responses: {"200": {description: candidates}}
+  /api/v1/reports/{id}/claim:
+    post:
+      summary: "POST /reports/{id}/claim"
+      tags: [reports]
+      x-permission: report:review
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: under_review}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/reports/{id}/review:
+    post:
+      tags: [reports]
+      summary: Decision accepted | rejected | duplicate (reason required for rejected/duplicate)
+      x-permission: report:review
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/ReviewRequest"}}}}
+      responses: {"200": {description: reviewed}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/media:
+    post:
+      tags: [media]
+      summary: Upload a file as the raw body. Declared Content-Type must match the sniffed type (jpeg, png, webp, mp4).
+      x-permission: report:create
+      requestBody: {required: true, content: {image/jpeg: {}, image/png: {}, image/webp: {}, video/mp4: {}}}
+      responses: {"201": {description: stored privately}, "413": {$ref: "#/components/responses/Error"}, "415": {$ref: "#/components/responses/Error"}}
+  /api/v1/media/{id}/url:
+    get:
+      tags: [media]
+      summary: Short-lived signed URL (5 min); only for cleared scan status; issuance is audited
+      x-permission: media:read | uploader
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: url}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/media/blob:
+    get:
+      tags: [media]
+      security: []
+      summary: Signed download (filesystem store only)
+      parameters:
+        - {name: k, in: query, required: true, schema: {type: string}}
+        - {name: exp, in: query, required: true, schema: {type: integer}}
+        - {name: sig, in: query, required: true, schema: {type: string}}
+      responses: {"200": {description: file}, "403": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/incidents:
+    post:
+      summary: "POST /incidents"
+      tags: [incidents]
+      x-permission: incident:create (in owner_org_id)
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/IncidentCreate"}}}}
+      responses: {"201": {description: created, content: {application/json: {schema: {$ref: "#/components/schemas/Incident"}}}}}
+    get:
+      summary: "GET /incidents"
+      tags: [incidents]
+      x-permission: incident:read (scoped) | incident:read_assigned
+      parameters:
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/IncidentStatus"}}
+        - {name: severity, in: query, schema: {$ref: "#/components/schemas/Severity"}}
+        - {name: active, in: query, schema: {type: boolean}}
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses: {"200": {description: page}}
+  /api/v1/incidents/{id}:
+    get:
+      tags: [incidents]
+      summary: Incident, append-only timeline, evidence, assignments and alerts
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: detail}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/incidents/{id}/transitions:
+    post:
+      tags: [incidents]
+      summary: Lifecycle transition. To active/escalated/closed and any reopen require incident:approve.
+      x-permission: incident:transition | incident:approve
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/TransitionRequest"}}}}
+      responses: {"200": {description: transitioned}, "403": {$ref: "#/components/responses/Error"}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/incidents/{id}/assessment:
+    post:
+      tags: [incidents]
+      summary: Change severity/response level with reason (L3/L4 need incident:approve)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/AssessmentRequest"}}}}
+      responses: {"200": {description: updated}}
+  /api/v1/incidents/{id}/reports:
+    post:
+      tags: [incidents]
+      summary: Link an accepted report as evidence
+      x-permission: incident:link_report
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/LinkRequest"}}}}
+      responses: {"200": {description: linked}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/incidents/{id}/assignments:
+    post:
+      tags: [resources]
+      summary: Atomic allocation (row lock + unique active-assignment index); 409 RESOURCE_UNAVAILABLE on races
+      x-permission: resource:allocate (resource org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/AssignRequest"}}}}
+      responses: {"201": {description: assigned}, "409": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/resources:
+    post:
+      summary: "POST /resources"
+      tags: [resources]
+      x-permission: resource:manage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/ResourceCreate"}}}}
+      responses: {"201": {description: created}}
+    get:
+      tags: [resources]
+      summary: Resources in scope; `stale=true` when the last position is older than the threshold
+      x-permission: resource:read
+      parameters:
+        - {name: type, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {$ref: "#/components/parameters/Limit"}
+      responses: {"200": {description: list}}
+  /api/v1/resources/{id}:
+    get: {summary: "GET /resources/{id}", tags: [resources], parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: resource}}}
+  /api/v1/resources/{id}/location:
+    post:
+      tags: [resources]
+      summary: Position report (manager or assigned responder). Older observations never overwrite newer ones.
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [lat, lng], properties: {lat: {type: number}, lng: {type: number}, observed_at: {type: string, format: date-time}}}}}
+      responses: {"200": {description: "applied: bool"}}
+  /api/v1/resources/{id}/status:
+    post:
+      tags: [resources]
+      summary: available | out_of_service (reason + version; refused while an assignment is active)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [status, reason, version], properties: {status: {enum: [available, out_of_service]}, reason: {type: string}, version: {type: integer}}}}}
+      responses: {"200": {description: updated}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/assignments/mine:
+    get: {summary: "GET /assignments/mine", tags: [resources], x-permission: assignment:update_assigned, responses: {"200": {description: responder missions}}}
+  /api/v1/assignments/{id}/status:
+    post:
+      tags: [resources]
+      summary: Mission lifecycle (assignee or allocator); cancelled requires reason; releases resource on completion/cancel
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [status, version], properties: {status: {enum: [assigned, acknowledged, en_route, on_scene, completed, cancelled]}, reason: {type: string}, version: {type: integer}}}}}
+      responses: {"200": {description: updated}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/responders:
+    get: {summary: "GET /responders", tags: [resources], x-permission: resource:allocate, responses: {"200": {description: active responders}}}
+
+  /api/v1/alerts/templates:
+    get: {summary: "GET /alerts/templates", tags: [alerts], x-permission: alert:draft, responses: {"200": {description: versioned templates and channel limits}}}
+  /api/v1/alerts:
+    post:
+      tags: [alerts]
+      summary: Create a DRAFT (never sends). Region is GeoJSON (Multi)Polygon ≤ 20,000 km²; expiry ≤ ALERT_MAX_VALIDITY.
+      x-permission: alert:draft (issuer org)
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/AlertCreate"}}}}
+      responses: {"201": {description: draft}, "422": {$ref: "#/components/responses/Error"}}
+    get:
+      summary: "GET /alerts"
+      tags: [alerts]
+      parameters: [{name: status, in: query, schema: {type: string}}, {$ref: "#/components/parameters/Limit"}]
+      responses: {"200": {description: list}}
+  /api/v1/alerts/public:
+    get:
+      tags: [alerts]
+      summary: Active operational alerts covering a point (citizen apps)
+      x-permission: alert:read_public
+      parameters: [{name: lat, in: query, required: true, schema: {type: number}}, {name: lng, in: query, required: true, schema: {type: number}}]
+      responses: {"200": {description: alerts}}
+  /api/v1/alerts/{id}:
+    get: {summary: "GET /alerts/{id}", tags: [alerts], parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: alert}}}
+  /api/v1/alerts/{id}/preview:
+    get: {tags: [alerts], summary: Exact rendered text per channel + region summary, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: preview}}}
+  /api/v1/alerts/{id}/submit:
+    post: {summary: "POST /alerts/{id}/submit", tags: [alerts], x-permission: alert:draft, parameters: [{$ref: "#/components/parameters/Id"}], requestBody: {$ref: "#/components/requestBodies/VersionReason"}, responses: {"200": {description: pending_approval}}}
+  /api/v1/alerts/{id}/approve:
+    post:
+      tags: [alerts]
+      summary: Four-eyes approval (approver ≠ author/submitter → else 403 FOUR_EYES_REQUIRED); reason required
+      x-permission: alert:approve
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {$ref: "#/components/requestBodies/VersionReason"}
+      responses: {"200": {description: approved}, "403": {$ref: "#/components/responses/Error"}}
+  /api/v1/alerts/{id}/dispatch:
+    post:
+      tags: [alerts]
+      summary: Idempotent dispatch of an APPROVED alert. Not approved → 409 NOT_APPROVED + security audit event.
+      x-permission: alert:dispatch
+      parameters: [{$ref: "#/components/parameters/Id"}, {$ref: "#/components/parameters/IdempotencyKey"}]
+      responses: {"202": {description: sending}, "200": {description: replay of the same dispatch}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/alerts/{id}/cancel:
+    post:
+      tags: [alerts]
+      summary: Cancel draft/pending/approved/sending (reason required). Sent alerts need a correction alert.
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {$ref: "#/components/requestBodies/VersionReason"}
+      responses: {"200": {description: cancelled}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/alerts/{id}/delivery:
+    get:
+      tags: [alerts]
+      summary: Per-channel attempt history. accepted = provider acceptance (not receipt); unknown = being reconciled.
+      x-permission: alert:read_delivery
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: delivery}}
+
+  /api/v1/gis/features:
+    get:
+      tags: [gis]
+      summary: GeoJSON FeatureCollection of permitted layers with freshness (stale flags, verified_at)
+      x-permission: gis:read (+ layer-specific permissions)
+      parameters:
+        - {name: bbox, in: query, schema: {type: string, example: "51.2,35.6,51.6,35.85"}}
+        - {name: layers, in: query, schema: {type: string, example: "reports,incidents,hospital"}}
+        - {name: since_hours, in: query, schema: {type: integer, maximum: 720}}
+      responses: {"200": {description: features}}
+    post:
+      summary: "POST /gis/features"
+      tags: [gis]
+      x-permission: gis:manage
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [layer, name, geometry, source]}}}}
+      responses: {"201": {description: created}}
+  /api/v1/gis/features/{id}/verify:
+    post: {tags: [gis], summary: Refresh verified_at, x-permission: gis:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: verified}}}
+  /api/v1/gis/impact-area:
+    post:
+      tags: [gis]
+      summary: Store an estimated impact area (radial-buffer-v1) with source and uncertainty — an estimate, never a verified footprint
+      x-permission: gis:manage
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [center, radius_m, source], properties: {incident_id: {type: string, format: uuid}, center: {$ref: "#/components/schemas/Point"}, radius_m: {type: number, minimum: 50, maximum: 100000}, uncertainty_m: {type: number}, source: {type: string}}}}}
+      responses: {"201": {description: created}}
+  /api/v1/gis/impact-areas:
+    get: {summary: "GET /gis/impact-areas", tags: [gis], parameters: [{name: incident_id, in: query, schema: {type: string, format: uuid}}], responses: {"200": {description: list}}}
+
+  /api/v1/me:
+    get: {tags: [identity], summary: "Caller identity, grants and effective permissions", responses: {"200": {description: me}}}
+  /api/v1/organizations:
+    get: {summary: "GET /organizations", tags: [identity], responses: {"200": {description: organizations}}}
+  /api/v1/admin/organizations:
+    post: {summary: "POST /admin/organizations", tags: [admin], x-permission: user:manage, responses: {"201": {description: created}}}
+  /api/v1/admin/users:
+    get: {summary: "GET /admin/users", tags: [admin], x-permission: user:manage, parameters: [{name: q, in: query, schema: {type: string}}], responses: {"200": {description: users with active grants}}}
+  /api/v1/admin/users/{id}/roles:
+    post:
+      tags: [admin]
+      summary: Grant a role (never to oneself). break_glass requires expires_at ≤ 8h and is audited as such.
+      x-permission: role:manage
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [role, reason], properties: {role: {type: string}, scope_org_id: {type: [string, "null"], format: uuid}, expires_at: {type: [string, "null"], format: date-time}, reason: {type: string}, break_glass: {type: boolean}}}}}
+      responses: {"201": {description: granted}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/admin/users/{id}/roles/{grant}:
+    delete:
+      summary: "DELETE /admin/users/{id}/roles/{grant}"
+      tags: [admin]
+      x-permission: role:manage
+      parameters: [{$ref: "#/components/parameters/Id"}, {name: grant, in: path, required: true, schema: {type: string, format: uuid}}, {name: reason, in: query, required: true, schema: {type: string}}]
+      responses: {"204": {description: revoked}}
+  /api/v1/admin/users/{id}/status:
+    post: {summary: "POST /admin/users/{id}/status", tags: [admin], x-permission: user:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: updated}}}
+  /api/v1/admin/audit:
+    get:
+      summary: "GET /admin/audit"
+      tags: [admin]
+      x-permission: audit:read
+      parameters:
+        - {name: target_type, in: query, schema: {type: string}}
+        - {name: target_id, in: query, schema: {type: string}}
+        - {name: actor_id, in: query, schema: {type: string, format: uuid}}
+        - {name: outcome, in: query, schema: {enum: [success, denied, failed]}}
+        - {name: before_seq, in: query, schema: {type: integer}}
+        - {$ref: "#/components/parameters/Limit"}
+      responses: {"200": {description: audit records}}
+  /api/v1/admin/audit/verify:
+    get: {tags: [admin], summary: Recompute the hash chain, x-permission: audit:read, responses: {"200": {description: "{checked, valid, broken_seq?, problem?}"}}}
+  /api/v1/admin/outbox:
+    get: {summary: "GET /admin/outbox", tags: [admin], x-permission: event:replay, parameters: [{name: state, in: query, schema: {enum: [dead, pending, published]}}], responses: {"200": {description: outbox state}}}
+  /api/v1/admin/outbox/replay:
+    post:
+      tags: [admin]
+      summary: Re-queue events (by ids or aggregate); bounded (1000), rate-limited and audited
+      x-permission: event:replay
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [reason], properties: {event_ids: {type: array, items: {type: string, format: uuid}}, aggregate_id: {type: string, format: uuid}, reason: {type: string}}}}}
+      responses: {"200": {description: "{requeued}"}}
+  /api/v1/dev/token:
+    post:
+      tags: [identity]
+      security: []
+      summary: LOCAL DEVELOPMENT ONLY (registered only with APP_ENV=local|test and AUTH_MODE=dev)
+      responses: {"200": {description: token}}
+
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: "^[A-Za-z0-9_.:-]{8,128}$"}}
+    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200}}
+    Cursor: {name: cursor, in: query, schema: {type: string}}
+  requestBodies:
+    VersionReason:
+      required: true
+      content: {application/json: {schema: {type: object, required: [version], properties: {version: {type: integer}, reason: {type: string, maxLength: 2000}}}}}
+  responses:
+    Error:
+      description: Error in the fixed envelope
+      content: {application/json: {schema: {$ref: "#/components/schemas/ErrorEnvelope"}}}
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, correlation_id]
+          properties:
+            code: {type: string, examples: [VALIDATION_ERROR, FORBIDDEN, NOT_FOUND, VERSION_CONFLICT, IDEMPOTENCY_KEY_REUSED, NOT_APPROVED, FOUR_EYES_REQUIRED, RESOURCE_UNAVAILABLE, RATE_LIMITED]}
+            message: {type: string}
+            correlation_id: {type: string}
+            details: {type: [array, "null"], items: {type: object, properties: {field: {type: string}, reason: {type: string}}}}
+    Point:
+      type: object
+      required: [lat, lng]
+      properties: {lat: {type: number, minimum: -90, maximum: 90}, lng: {type: number, minimum: -180, maximum: 180}}
+    Location:
+      type: object
+      required: [lat, lng, accuracy_m]
+      properties:
+        lat: {type: number}
+        lng: {type: number}
+        accuracy_m: {type: number, exclusiveMinimum: 0, maximum: 5000}
+        source: {enum: [gps, network, manual]}
+        precision: {enum: [exact, approximate], readOnly: true}
+    ReportType: {enum: [structural_damage, building_collapse, trapped_people, injury, fire, gas_leak, road_blocked, flooding, power_outage, water_outage, landslide, hazmat, other]}
+    ReportStatus: {enum: [received, triage, under_review, accepted, rejected, duplicate, linked_to_incident]}
+    Severity: {enum: [low, medium, high, critical]}
+    ReportCreate:
+      type: object
+      additionalProperties: false
+      required: [type, location]
+      properties:
+        type: {$ref: "#/components/schemas/ReportType"}
+        description: {type: string, maxLength: 2000}
+        occurred_at: {type: string, format: date-time, description: "Client-claimed time (≤ now+5m, ≥ now-7d); not trusted as authoritative"}
+        location: {$ref: "#/components/schemas/Location"}
+        media_ids: {type: array, maxItems: 5, items: {type: string, format: uuid}}
+    ReportReceipt:
+      type: object
+      properties:
+        report_id: {type: string, format: uuid}
+        status: {const: received}
+        received_at: {type: string, format: date-time}
+        correlation_id: {type: string}
+        possible_duplicates: {type: integer}
+    ReportPage:
+      type: object
+      properties:
+        items: {type: array, items: {type: object}}
+        next_cursor: {type: string}
+    ReviewRequest:
+      type: object
+      required: [decision, version]
+      properties:
+        decision: {enum: [accepted, rejected, duplicate]}
+        reason: {type: string, maxLength: 1000}
+        severity: {$ref: "#/components/schemas/Severity"}
+        duplicate_of: {type: string, format: uuid}
+        version: {type: integer}
+    IncidentStatus: {enum: [draft, open, active, escalated, contained, resolved, closed]}
+    IncidentCreate:
+      type: object
+      required: [type, title, severity, owner_org_id]
+      properties:
+        type: {type: string}
+        title: {type: string, maxLength: 200}
+        severity: {$ref: "#/components/schemas/Severity"}
+        response_level: {enum: [L0, L1, L2, L3, L4]}
+        owner_org_id: {type: string, format: uuid}
+        location: {$ref: "#/components/schemas/Point"}
+        report_ids: {type: array, items: {type: string, format: uuid}}
+        status: {enum: [draft, open]}
+        reason: {type: string}
+    Incident:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        status: {$ref: "#/components/schemas/IncidentStatus"}
+        version: {type: integer}
+        allowed_transitions: {type: array, items: {type: string}}
+    TransitionRequest:
+      type: object
+      required: [to, reason, version]
+      properties: {to: {$ref: "#/components/schemas/IncidentStatus"}, reason: {type: string}, version: {type: integer}}
+    AssessmentRequest:
+      type: object
+      required: [severity, response_level, reason, version]
+      properties: {severity: {$ref: "#/components/schemas/Severity"}, response_level: {enum: [L0, L1, L2, L3, L4]}, reason: {type: string}, version: {type: integer}}
+    LinkRequest:
+      type: object
+      required: [report_id, reason]
+      properties: {report_id: {type: string, format: uuid}, relation_type: {enum: [evidence, origin, related]}, reason: {type: string}}
+    AssignRequest:
+      type: object
+      required: [resource_id, reason]
+      properties: {resource_id: {type: string, format: uuid}, assignee_id: {type: string, format: uuid}, reason: {type: string}, proposed: {type: boolean}}
+    ResourceCreate:
+      type: object
+      required: [organization_id, type, name]
+      properties:
+        organization_id: {type: string, format: uuid}
+        type: {enum: [ambulance, fire_truck, rescue_team, police_unit, shelter, equipment, medical_team]}
+        name: {type: string}
+        capabilities: {type: object}
+        capacity: {type: integer}
+        location: {$ref: "#/components/schemas/Point"}
+    AlertCreate:
+      type: object
+      required: [mode, severity, issuer_org_id, region, region_label, template_code, template_version, channels, expires_at]
+      properties:
+        incident_id: {type: string, format: uuid}
+        mode: {enum: [test, operational]}
+        severity: {enum: [advisory, watch, warning, emergency]}
+        issuer_org_id: {type: string, format: uuid}
+        region: {type: object, description: GeoJSON Polygon or MultiPolygon (EPSG:4326)}
+        region_label: {type: string, maxLength: 120}
+        template_code: {type: string}
+        template_version: {type: integer}
+        params: {type: object, additionalProperties: {type: string, maxLength: 300}}
+        channels: {type: array, items: {enum: [internal, push, sms, cell_broadcast]}}
+        expires_at: {type: string, format: date-time}

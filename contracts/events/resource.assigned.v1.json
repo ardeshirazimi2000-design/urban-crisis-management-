@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resource.assigned.v1.json",
+  "title": "resource.assigned v1",
+  "description": "Atomic allocation.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "resource.assigned"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "assignment_id",
+        "incident_id",
+        "resource_id",
+        "status"
+      ],
+      "properties": {
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "resource_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "resource_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "assignee_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -32,6 +32,7 @@ type App struct {
 	Resolver *auth.Resolver
 	Store    media.Store
 	Handler  http.Handler
+	Routes   []string
 	draining atomic.Bool
 }
 
@@ -90,6 +91,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 		httpx.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 	mux.HandleFunc("GET /metrics", httpx.Metrics.Handler())
+	a.Routes = append(router.Routes, "GET /health/live", "GET /health/ready")
 	a.registerGauges()
 
 	a.Handler = httpx.Chain(mux, httpx.Recover, httpx.Correlation, httpx.AccessLog, httpx.SecurityHeaders, httpx.CORS(cfg.CORSOrigins))

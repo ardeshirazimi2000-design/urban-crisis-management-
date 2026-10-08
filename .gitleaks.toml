@@ -1,0 +1,7 @@
+# Local-only sample values that are intentionally public (docs, .env.example, tests, seeds).
+[extend]
+useDefault = true
+[allowlist]
+description = "local development placeholders"
+regexes = ['''local-only''', '''change-me-local''', '''ci-only''', '''integration-test-secret''', '''integration-media-secret''', '''local-dev-secret-change-me''']
+paths = ['''\.env\.example''', '''docs/''', '''tests/''']

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incident.report_linked.v1.json",
+  "title": "incident.report_linked v1",
+  "description": "Evidence linked.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "incident.report_linked"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "incident_id",
+        "report_id"
+      ],
+      "properties": {
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "report_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "relation_type": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

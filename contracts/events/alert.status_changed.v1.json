@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alert.status_changed.v1.json",
+  "title": "alert.status_changed v1",
+  "description": "Aggregate delivery status changed.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "alert.status_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "alert_id",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "alert_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

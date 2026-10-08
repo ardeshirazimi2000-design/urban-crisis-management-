@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alert.dispatch_requested.v1.json",
+  "title": "alert.dispatch_requested v1",
+  "description": "Immutable dispatch command created.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "alert.dispatch_requested"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "alert_id",
+        "channels"
+      ],
+      "properties": {
+        "alert_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channels": {
+          "type": "array"
+        },
+        "mode": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incident.status_changed.v1.json",
+  "title": "incident.status_changed v1",
+  "description": "Lifecycle transition with mandatory reason.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "incident.status_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "reason"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reopen": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

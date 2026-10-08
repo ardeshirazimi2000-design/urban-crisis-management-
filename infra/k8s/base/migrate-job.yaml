@@ -1,0 +1,20 @@
+# Run per release BEFORE rolling out new pods (expand/contract migrations only).
+apiVersion: batch/v1
+kind: Job
+metadata: {name: migrate-1-0-0, namespace: crisis}
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: migrate
+          image: registry.example.invalid/crisis/core:1.0.0
+          command: ["/app/migrate"]
+          envFrom: [{configMapRef: {name: core-config}}, {secretRef: {name: core-secrets}}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 256Mi}}

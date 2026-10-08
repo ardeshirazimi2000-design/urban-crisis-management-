@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incident.created.v1.json",
+  "title": "incident.created v1",
+  "description": "Incident formed.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "incident.created"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "incident_id",
+        "code",
+        "status",
+        "severity",
+        "owner_org_id"
+      ],
+      "properties": {
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "response_level": {
+          "type": "string"
+        },
+        "owner_org_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "location": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "report_ids": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

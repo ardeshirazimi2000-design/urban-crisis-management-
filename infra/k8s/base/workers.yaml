@@ -1,0 +1,224 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay
+  namespace: crisis
+  labels: {app.kubernetes.io/name: relay, app.kubernetes.io/part-of: urban-crisis}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: relay}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: relay, app.kubernetes.io/part-of: urban-crisis}
+      annotations: {prometheus.io/scrape: "false", prometheus.io/port: "8080"}
+    spec:
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: relay}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app.kubernetes.io/name: relay}}
+      containers:
+        - name: relay
+          # Pin by digest in release overlays (immutable images).
+          image: registry.example.invalid/crisis/core:1.0.0
+          command: ["/app/relay"]
+          envFrom:
+            - configMapRef: {name: core-config}
+            - secretRef: {name: core-secrets}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifier
+  namespace: crisis
+  labels: {app.kubernetes.io/name: notifier, app.kubernetes.io/part-of: urban-crisis}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: notifier}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: notifier, app.kubernetes.io/part-of: urban-crisis}
+      annotations: {prometheus.io/scrape: "false", prometheus.io/port: "8080"}
+    spec:
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: notifier}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app.kubernetes.io/name: notifier}}
+      containers:
+        - name: notifier
+          # Pin by digest in release overlays (immutable images).
+          image: registry.example.invalid/crisis/core:1.0.0
+          command: ["/app/notifier"]
+          envFrom:
+            - configMapRef: {name: core-config}
+            - secretRef: {name: core-secrets}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+  namespace: crisis
+  labels: {app.kubernetes.io/name: consumer, app.kubernetes.io/part-of: urban-crisis}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: consumer}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: consumer, app.kubernetes.io/part-of: urban-crisis}
+      annotations: {prometheus.io/scrape: "false", prometheus.io/port: "8080"}
+    spec:
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: consumer}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app.kubernetes.io/name: consumer}}
+      containers:
+        - name: consumer
+          # Pin by digest in release overlays (immutable images).
+          image: registry.example.invalid/crisis/core:1.0.0
+          command: ["/app/consumer"]
+          envFrom:
+            - configMapRef: {name: core-config}
+            - secretRef: {name: core-secrets}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+  namespace: crisis
+  labels: {app.kubernetes.io/name: ai-worker, app.kubernetes.io/part-of: urban-crisis}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: ai-worker}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ai-worker, app.kubernetes.io/part-of: urban-crisis}
+      annotations: {prometheus.io/scrape: "false", prometheus.io/port: "8080"}
+    spec:
+      serviceAccountName: core
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: ai-worker}}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: {matchLabels: {app.kubernetes.io/name: ai-worker}}
+      containers:
+        - name: ai-worker
+          # Pin by digest in release overlays (immutable images).
+          image: registry.example.invalid/crisis/ai-assist:1.0.0
+          command: ["python", "-m", "app.worker"]
+          envFrom:
+            - configMapRef: {name: core-config}
+          env: [{name: AI_MAX_CONCURRENCY, value: "4"}]
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+# Kafka consumers must scale on consumer lag and downstream capacity, not CPU alone (doc §11).
+# Use KEDA (kafka scaler) in clusters that run it; partitions bound useful replicas.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: workers, namespace: crisis}
+spec:
+  maxUnavailable: 1
+  selector: {matchExpressions: [{key: app.kubernetes.io/name, operator: In, values: [relay, notifier, consumer, ai-worker]}]}

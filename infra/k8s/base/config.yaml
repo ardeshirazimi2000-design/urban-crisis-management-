@@ -1,0 +1,23 @@
+# Non-secret configuration. Secrets (DATABASE_URL, MEDIA_URL_SECRET, object-store keys) are delivered by
+# External Secrets / Vault into the `core-secrets` Secret — never committed (see secret-template.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: core-config, namespace: crisis}
+data:
+  APP_ENV: production
+  HTTP_ADDR: ":8080"
+  LOG_LEVEL: info
+  AUTH_MODE: oidc
+  OIDC_ISSUER_URL: https://idp.example.invalid/realms/crisis   # replace per environment
+  OIDC_AUDIENCE: crisis-api
+  EVENT_PUBLISHER: kafka
+  KAFKA_BROKERS: kafka-bootstrap.kafka.svc:9092
+  KAFKA_TOPIC_PREFIX: crisis.
+  OBJECT_STORE: s3
+  OBJECT_STORAGE_BUCKET: crisis-media
+  OBJECT_STORAGE_USE_SSL: "true"
+  MEDIA_ALLOW_UNSCANNED: "false"
+  ALERT_REQUIRE_DISTINCT_APPROVER: "true"
+  ALERT_MAX_VALIDITY: 72h
+  PRINCIPAL_CACHE_TTL: 30s
+  SHUTDOWN_DRAIN_SECONDS: "5"

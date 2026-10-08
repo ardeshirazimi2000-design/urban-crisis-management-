@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resource.assignment_status_changed.v1.json",
+  "title": "resource.assignment_status_changed v1",
+  "description": "Mission lifecycle change.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "resource.assignment_status_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "assignment_id",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "assignment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

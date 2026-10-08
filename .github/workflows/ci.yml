@@ -1,0 +1,109 @@
+# PR gates (detailed design §13): format/lint, unit + integration tests, contract checks, secret scan,
+# dependency scanning, manifest validation. Any failure blocks the merge.
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+permissions: {contents: read}
+concurrency: {group: "ci-${{ github.ref }}", cancel-in-progress: true}
+
+jobs:
+  core:
+    name: core (Go)
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/core}}
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: {POSTGRES_USER: crisis, POSTGRES_PASSWORD: ci-only, POSTGRES_DB: crisis_test}
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U crisis" --health-interval 5s --health-retries 20
+      kafka:
+        image: apache/kafka:3.7.1
+        ports: ["9092:9092"]
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    env:
+      GOTOOLCHAIN: local
+      TEST_DATABASE_URL: postgres://crisis:ci-only@localhost:5432/crisis_test?sslmode=disable
+      TEST_KAFKA_BROKERS: localhost:9092
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.24.7", cache-dependency-path: services/core/go.sum}
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - name: tests (unit, acceptance AT-01..AT-10, OpenAPI + event schema contracts, Kafka round-trip)
+        run: go test -race -count=1 ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.3 ./...
+
+  ai-assist:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/ai-assist}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements-dev.txt pip-audit==2.7.3
+      - run: python -m pytest -q
+      - run: pip-audit -r requirements.txt
+
+  web-console:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/web-console}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm, cache-dependency-path: apps/web-console/package-lock.json}
+      - run: npm ci --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=moderate
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: "3.24.5", channel: stable}
+      - name: shared core (offline queue, AT-12 logic)
+        working-directory: apps/mobile-shared
+        run: dart pub get && dart analyze --fatal-infos && dart test
+      - name: citizen app
+        working-directory: apps/mobile-citizen
+        run: flutter pub get && flutter analyze && flutter test
+      - name: responder app
+        working-directory: apps/mobile-responder
+        run: flutter pub get && flutter analyze && flutter test
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate docker compose
+        run: cp .env.example .env && docker compose config -q
+      - name: validate Kubernetes manifests
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+          ./kubeconform -strict -summary $(ls infra/k8s/base/*.yaml | grep -v kustomization)
+      - name: validate OpenAPI
+        run: npx --yes @redocly/cli@1.25.11 lint contracts/openapi/core-api.v1.yaml --format=summary
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: gitleaks/gitleaks-action@v2
+        env: {GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notification.status_changed.v1.json",
+  "title": "notification.status_changed v1",
+  "description": "Per-channel attempt result. accepted = provider acceptance, not receipt.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "notification.status_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "alert_id",
+        "channel",
+        "attempt_no",
+        "status"
+      ],
+      "properties": {
+        "alert_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "attempt_no": {
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "delivered",
+            "rejected",
+            "failed",
+            "unknown"
+          ]
+        },
+        "result_code": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

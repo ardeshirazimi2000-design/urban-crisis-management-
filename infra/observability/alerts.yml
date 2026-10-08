@@ -1,0 +1,46 @@
+# Operational alert rules (routing/on-call in Alertmanager). Thresholds are initial values to tune with real load (D-08).
+groups:
+  - name: crisis-api
+    rules:
+      - alert: APIHighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: {severity: page}
+        annotations: {summary: "خطای 5xx بیش از ۲٪", runbook: docs/runbooks/README.md}
+      - alert: APILatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route!~".*media.*"}[5m]))) > 0.5
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "صدک ۹۵ تأخیر API بیش از ۵۰۰ms"}
+      - alert: ReportIntakeRejectedSpike
+        expr: sum(rate(http_requests_total{route="POST /api/v1/reports",status=~"429|422"}[5m])) > 5
+        for: 5m
+        labels: {severity: ticket}
+        annotations: {summary: "افزایش رد گزارش (احتمال سیل گزارش جعلی یا خطای کلاینت)"}
+  - name: crisis-events
+    rules:
+      - alert: OutboxBacklogGrowing
+        expr: crisis_outbox_oldest_pending_seconds > 120
+        for: 5m
+        labels: {severity: page}
+        annotations: {summary: "رویدادها منتشر نمی‌شوند (Kafka یا relay)", runbook: docs/runbooks/kafka-outage.md}
+      - alert: OutboxDeadLetters
+        expr: crisis_outbox_events{state="dead"} > 0
+        labels: {severity: ticket}
+        annotations: {summary: "رویداد در DLQ؛ بررسی و بازپخش کنترل‌شده", runbook: docs/runbooks/kafka-outage.md}
+  - name: crisis-operations
+    rules:
+      - alert: ReviewQueueBacklog
+        expr: sum(crisis_reports_open) > 200
+        for: 10m
+        labels: {severity: page}
+        annotations: {summary: "صف بررسی گزارش‌ها انباشته شده؛ افزایش اپراتور یا فعال‌سازی رویه ازدحام"}
+      - alert: NotificationUnknownStates
+        expr: sum by (channel) (crisis_notification_attempts{status="unknown"}) > 0
+        for: 10m
+        labels: {severity: page}
+        annotations: {summary: "وضعیت نامشخص ارسال هشدار؛ تطبیق با ارائه‌دهنده", runbook: docs/runbooks/notification-disruption.md}
+      - alert: NotificationFailures
+        expr: sum by (channel) (increase(crisis_notification_attempts{status=~"failed|rejected"}[15m])) > 0
+        labels: {severity: ticket}
+        annotations: {summary: "شکست یا رد ارسال در کانال اعلان", runbook: docs/runbooks/notification-disruption.md}

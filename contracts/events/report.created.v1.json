@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "report.created.v1.json",
+  "title": "report.created v1",
+  "description": "Report intake committed (payload minimised: no reporter identity, no media).",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "report.created"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "report_id",
+        "report_type",
+        "location",
+        "received_at"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "report_type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "location": {
+          "type": "object",
+          "required": [
+            "lat",
+            "lng",
+            "accuracy_m"
+          ]
+        },
+        "occurred_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "media_count": {
+          "type": "integer"
+        },
+        "possible_duplicates": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

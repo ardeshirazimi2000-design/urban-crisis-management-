@@ -24,6 +24,22 @@ import (
 )
 
 func main() {
+	// Container healthcheck for distroless images (no shell/curl): exit 0 when /health/ready is OK.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		addr := os.Getenv("HTTP_ADDR")
+		if addr == "" || addr[0] == ':' {
+			addr = "127.0.0.1" + addr
+		}
+		if addr == "127.0.0.1" {
+			addr += ":8080"
+		}
+		c := &http.Client{Timeout: 2 * time.Second}
+		resp, err := c.Get("http://" + addr + "/health/ready")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err.Error())
 		os.Exit(1)
