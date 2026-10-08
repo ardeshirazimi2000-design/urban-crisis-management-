@@ -40,7 +40,7 @@ func TestRenderMarksTestMessages(t *testing.T) {
 	if strings.Contains(op, "آزمایشی") || strings.Contains(op, "{{") {
 		t.Fatalf("bad operational rendering: %s", op)
 	}
-	if !strings.Contains(op, "23:30") { // 20:00 UTC = 23:30 Tehran
+	if !strings.Contains(op, "۱۴۰۵/۰۷/۱۶ ساعت ۲۳:۳۰") { // 20:00 UTC = 23:30 Tehran, 16 Mehr 1405
 		t.Fatalf("expiry must be shown in Tehran time: %s", op)
 	}
 }
@@ -75,5 +75,15 @@ func TestChannelLength(t *testing.T) {
 	}
 	if CheckChannelLengths(long, []string{"push"}) != nil {
 		t.Fatal("push allows 400")
+	}
+}
+
+func TestJalali(t *testing.T) {
+	cases := [][6]int{{2026, 3, 21, 1405, 1, 1}, {2026, 10, 8, 1405, 7, 16}, {2025, 3, 20, 1403, 12, 30}, {2024, 3, 20, 1403, 1, 1}, {2000, 1, 1, 1378, 10, 11}}
+	for _, c := range cases {
+		y, m, d := toJalali(c[0], c[1], c[2])
+		if y != c[3] || m != c[4] || d != c[5] {
+			t.Errorf("%v: got %d/%d/%d", c, y, m, d)
+		}
 	}
 }

@@ -93,7 +93,7 @@ func Render(t Template, mode, issuer, region string, expires time.Time, params m
 		prefix = "«آزمایشی» "
 	}
 	repl := []string{"{{mode_prefix}}", prefix, "{{issuer}}", issuer, "{{region}}", region,
-		"{{expires}}", expires.In(tehran).Format("2006-01-02 15:04") + " (تهران)"}
+		"{{expires}}", FormatTehran(expires) + " به وقت تهران"}
 	for _, p := range t.Params {
 		repl = append(repl, "{{"+p+"}}", strings.TrimSpace(params[p]))
 	}
