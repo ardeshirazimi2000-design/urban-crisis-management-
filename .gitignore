@@ -1,0 +1,32 @@
+# Secrets / local env
+.env
+*.env.local
+!.env.example
+
+# Build outputs
+bin/
+dist/
+build/
+coverage*.out
+node_modules/
+.vite/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+data/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/ios/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+.packages
+pubspec.lock.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
