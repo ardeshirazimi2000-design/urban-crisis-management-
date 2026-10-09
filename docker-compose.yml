@@ -19,6 +19,11 @@ x-core-env: &core-env
   OBJECT_STORE: fs
   OBJECT_STORE_DIR: /data/objects
   PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8081}
+  # Reports outside this box are rejected (default: Tehran province).
+  SERVICE_AREA_MIN_LAT: ${SERVICE_AREA_MIN_LAT:-34.8}
+  SERVICE_AREA_MAX_LAT: ${SERVICE_AREA_MAX_LAT:-36.3}
+  SERVICE_AREA_MIN_LNG: ${SERVICE_AREA_MIN_LNG:-50.3}
+  SERVICE_AREA_MAX_LNG: ${SERVICE_AREA_MAX_LNG:-53.2}
   CORS_ORIGINS: http://localhost:5173
   LOG_LEVEL: info
 

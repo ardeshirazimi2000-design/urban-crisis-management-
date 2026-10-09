@@ -139,4 +139,14 @@ void main() {
     expect(r.conflicts, 1);
     expect(queue.all.last.state, OpState.conflict);
   });
+
+  test('validation errors are explained in Persian with a tracking id', () {
+    final e = ApiException(422, 'VALIDATION_ERROR', 'درخواست معتبر نیست', correlationId: 'abcdef12-3456',
+        details: [{'field': 'location', 'reason': 'outside_service_area'}]);
+    final text = describeApiError(e);
+    expect(text, contains('خارج از محدوده'));
+    expect(text, contains('abcdef12'));
+    expect(describeApiError(ApiException(429, 'RATE_LIMITED', 'x')), contains('چند دقیقه'));
+    expect(describeApiError(ApiException(422, 'VALIDATION_ERROR', 'x', details: [{'field': 'foo', 'reason': 'bar'}])), contains('foo'));
+  });
 }

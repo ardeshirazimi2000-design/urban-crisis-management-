@@ -117,6 +117,15 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 			he = NewError(http.StatusInternalServerError, "INTERNAL", "خطای داخلی؛ با شناسه پیگیری تماس بگیرید")
 		}
 	}
+	if he.Code == "VALIDATION_ERROR" && len(he.Details) > 0 {
+		// Field names and reason codes only (never submitted values): enough to diagnose rejected requests.
+		reasons := make([]string, 0, len(he.Details))
+		for _, d := range he.Details {
+			reasons = append(reasons, d.Field+":"+d.Reason)
+		}
+		slog.InfoContext(r.Context(), "validation_failed", "route", r.Pattern, "reasons", strings.Join(reasons, ","),
+			"correlation_id", CorrelationID(r.Context()))
+	}
 	body := map[string]any{"error": map[string]any{
 		"code": he.Code, "message": he.Message, "correlation_id": CorrelationID(r.Context()), "details": he.Details,
 	}}

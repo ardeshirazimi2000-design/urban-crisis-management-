@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:uuid/uuid.dart';
 
 import 'api_client.dart';
+import 'error_text.dart';
 import 'secure_store.dart';
 
 const _uuid = Uuid();
@@ -129,7 +130,7 @@ class OfflineQueue {
           report.sent++;
         } on ApiException catch (e) {
           op
-            ..lastError = '${e.code}: ${e.message}'
+            ..lastError = describeApiError(e)
             ..correlationId = e.correlationId;
           if (e.isRetryable) {
             report.stoppedOffline = e.isNetwork;

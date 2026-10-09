@@ -113,7 +113,6 @@ class _ReportScreenState extends State<ReportScreen> {
   GeoLocation? _loc;
   bool _locating = false, _sending = false;
   String? _locError;
-  final DateTime _openedAt = DateTime.now();
 
   @override
   void initState() {
@@ -139,11 +138,11 @@ class _ReportScreenState extends State<ReportScreen> {
     if (!_form.currentState!.validate() || _loc == null) return;
     setState(() => _sending = true);
     widget.state.lastLocation = _loc;
-    final op = await widget.state.submit(ReportSubmission(type: _type!, description: _desc.text.trim(), location: _loc!, occurredAt: _openedAt));
+    final op = await widget.state.submit(ReportSubmission(type: _type!, description: _desc.text.trim(), location: _loc!));
     if (!mounted) return;
     final msg = switch (op.state) {
       OpState.done => 'گزارش دریافت شد. این به معنی تأیید یا اعزام نیست؛ کارشناسان آن را بررسی می‌کنند.',
-      OpState.rejected => 'گزارش پذیرفته نشد: ${op.lastError}',
+      OpState.rejected => 'گزارش پذیرفته نشد. ${op.lastError}',
       _ => 'گزارش روی دستگاه ذخیره شد و پس از برقراری ارتباط ارسال می‌شود.',
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
