@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 /// Fake server: records requests, dedupes by Idempotency-Key and can simulate outages.
 class FakeServer {
   bool online = true;
+  bool tokenExpired = false;
   bool loseResponses = false; // apply the effect but drop the response (ambiguous failure)
   final effects = <String, Map<String, dynamic>>{};
   final requests = <http.Request>[];
@@ -18,6 +19,9 @@ class FakeServer {
   MockClient get client => MockClient((req) async {
         requests.add(req);
         if (!online) throw http.ClientException('offline');
+        if (tokenExpired) {
+          return http.Response(jsonEncode({'error': {'code': 'UNAUTHENTICATED', 'message': 'expired'}}), 401);
+        }
         final key = req.headers['Idempotency-Key'];
         if (req.url.path.endsWith('/reports')) {
           final body = jsonDecode(req.body) as Map<String, dynamic>;
@@ -118,6 +122,19 @@ void main() {
     expect(r.sent, 1);
     expect(queue.all.first.state, OpState.rejected);
     expect(queue.all.first.correlationId, 'c1');
+  });
+
+  test('expired session keeps items queued instead of rejecting them', () async {
+    await queue.enqueue(kind: 'report.create', method: 'POST', path: '/reports', body: report());
+    server.tokenExpired = true;
+    var r = await queue.flush();
+    expect(r.needsAuth, isTrue);
+    expect(r.rejected, 0);
+    expect(queue.pending, hasLength(1));
+    server.tokenExpired = false;
+    r = await queue.flush();
+    expect(r.sent, 1);
+    expect(queue.pending, isEmpty);
   });
 
   test('version conflict: server-authoritative, resolver detects already-applied ops', () async {

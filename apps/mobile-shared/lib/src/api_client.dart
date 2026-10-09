@@ -19,6 +19,9 @@ class ApiException implements Exception {
   ApiException(this.status, this.code, this.message, {this.correlationId = '', this.details = const []});
 
   bool get isNetwork => status == 0;
+
+  /// Session missing or expired: not a verdict on the request itself.
+  bool get isUnauthenticated => status == 401;
   bool get isRetryable => status == 0 || status == 429 || status >= 500 || code == 'IDEMPOTENCY_IN_PROGRESS';
 
   @override

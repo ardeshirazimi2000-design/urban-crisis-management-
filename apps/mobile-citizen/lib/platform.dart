@@ -32,6 +32,9 @@ class SecureTokens {
   static Future<String?> read() => _storage.read(key: 'access_token');
   static Future<void> write(String? t) =>
       t == null ? _storage.delete(key: 'access_token') : _storage.write(key: 'access_token', value: t);
+  static Future<String?> readPref(String key) => _storage.read(key: 'pref.$key');
+  static Future<void> writePref(String key, String? v) =>
+      v == null ? _storage.delete(key: 'pref.$key') : _storage.write(key: 'pref.$key', value: v);
 }
 
 Future<EncryptedJsonStore> openStore(String name) async {

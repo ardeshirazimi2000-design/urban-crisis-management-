@@ -59,8 +59,11 @@ typedef ConflictResolver = Future<bool> Function(QueuedOp op);
 class SyncReport {
   int sent = 0, rejected = 0, conflicts = 0;
   bool stoppedOffline = false;
+
+  /// The server refused the session (expired/missing token): items are kept; sign in again and flush.
+  bool needsAuth = false;
   @override
-  String toString() => 'sent=$sent rejected=$rejected conflicts=$conflicts offline=$stoppedOffline';
+  String toString() => 'sent=$sent rejected=$rejected conflicts=$conflicts offline=$stoppedOffline auth=$needsAuth';
 }
 
 /// Durable, encrypted FIFO of outgoing operations with idempotent sync.
@@ -132,8 +135,9 @@ class OfflineQueue {
           op
             ..lastError = describeApiError(e)
             ..correlationId = e.correlationId;
-          if (e.isRetryable) {
+          if (e.isRetryable || e.isUnauthenticated) {
             report.stoppedOffline = e.isNetwork;
+            report.needsAuth = e.isUnauthenticated;
             await _persist();
             break; // keep order; retry later
           }

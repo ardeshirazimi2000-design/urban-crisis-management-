@@ -15,6 +15,14 @@ class CitizenState extends ChangeNotifier {
   final Future<void> Function(String?) writeToken;
   final bool devAuth;
 
+  /// Small private values kept in the OS keystore (stable test identity, access code).
+  final Future<String?> Function(String key) readPref;
+  final Future<void> Function(String key, String? value) writePref;
+
+  /// The test server requires an access code that this device does not have (or has a wrong one).
+  bool needsAccessCode = false;
+  String? accessCodeError;
+
   List<PublicAlert> alerts = [];
   DateTime? alertsFetchedAt;
   List<MyReport> myReports = [];
@@ -26,7 +34,13 @@ class CitizenState extends ChangeNotifier {
   StreamSubscription<List<QueuedOp>>? _sub;
 
   CitizenState({required this.api, required this.queue, required this.alertCache, required this.readToken,
-      required this.writeToken, this.devAuth = true});
+      required this.writeToken, this.devAuth = true, Future<String?> Function(String)? readPref,
+      Future<void> Function(String, String?)? writePref})
+      : readPref = readPref ?? _noPref,
+        writePref = writePref ?? _noWrite;
+
+  static Future<String?> _noPref(String _) async => null;
+  static Future<void> _noWrite(String _, String? __) async {}
 
   Future<void> start() async {
     await queue.load();
@@ -42,18 +56,49 @@ class CitizenState extends ChangeNotifier {
   }
 
   /// Development identity only. Production uses the national/municipal OIDC provider.
-  Future<void> ensureIdentity() async {
-    if (await readToken() != null || !devAuth) return;
+  /// The identity is stable per installation, so "my reports" survive an expired session.
+  Future<void> ensureIdentity({bool force = false}) async {
+    if (!devAuth || (!force && await readToken() != null)) return;
+    var subject = await readPref('citizen_subject');
+    if (subject == null) {
+      subject = 'citizen-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+      await writePref('citizen_subject', subject);
+    }
+    final code = await readPref('access_code') ?? devAccessCode;
     try {
-      final id = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-      await writeToken(await api.devToken('citizen-$id', 'شهروند', const [], accessCode: devAccessCode));
+      await writeToken(await api.devToken(subject, 'شهروند', const [], accessCode: code));
+      needsAccessCode = false;
+      accessCodeError = null;
     } on ApiException catch (e) {
       offline = e.isNetwork;
+      if (e.code == 'ACCESS_CODE_INVALID') {
+        needsAccessCode = true;
+        accessCodeError = code.isEmpty ? null : 'کد وارد‌شده درست نیست.';
+      } else if (e.status == 429) {
+        accessCodeError = 'تلاش زیاد بود؛ یک دقیقه بعد دوباره امتحان کنید.';
+      }
     }
+    notifyListeners();
+  }
+
+  /// Saves the access code given by the test-server administrator and signs in with it.
+  Future<bool> submitAccessCode(String code) async {
+    await writePref('access_code', code.trim());
+    await ensureIdentity(force: true);
+    if (!needsAccessCode && accessCodeError == null) await sync();
+    return !needsAccessCode;
+  }
+
+  Future<bool> _reauthenticate() async {
+    await writeToken(null);
+    await ensureIdentity(force: true);
+    return await readToken() != null;
   }
 
   Future<void> sync() async {
-    final r = await queue.flush();
+    if (devAuth && !needsAccessCode && await readToken() == null) await ensureIdentity(); // first start was offline
+    var r = await queue.flush();
+    if (r.needsAuth && await _reauthenticate()) r = await queue.flush();
     offline = r.stoppedOffline;
     if (!offline) lastSyncAt = DateTime.now();
     await refreshAlerts();
@@ -61,6 +106,11 @@ class CitizenState extends ChangeNotifier {
       myReports = await api.myReports();
     } on ApiException catch (e) {
       offline = offline || e.isNetwork;
+      if (e.isUnauthenticated && await _reauthenticate()) {
+        try {
+          myReports = await api.myReports();
+        } on ApiException catch (_) {}
+      }
     }
     notifyListeners();
   }

@@ -17,6 +17,8 @@ Future<void> main() async {
     alertCache: await openStore('alert_cache'),
     readToken: SecureTokens.read,
     writeToken: SecureTokens.write,
+    readPref: SecureTokens.readPref,
+    writePref: SecureTokens.writePref,
     devAuth: devAuth,
   );
   runApp(CitizenApp(state: state));

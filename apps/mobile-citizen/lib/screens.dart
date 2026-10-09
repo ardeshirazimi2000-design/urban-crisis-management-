@@ -21,6 +21,7 @@ class HomeScreen extends StatelessWidget {
               onRefresh: state.sync,
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 const EmergencyNumbers(),
+                if (state.needsAccessCode) AccessCodeCard(state: state),
                 if (state.offline)
                   const Card(
                     color: Color(0xFFFFF4DC),
@@ -63,6 +64,56 @@ class HomeScreen extends StatelessWidget {
             ),
           );
         },
+      );
+}
+
+/// Shown when the test server asks for an access code (given by its administrator).
+class AccessCodeCard extends StatefulWidget {
+  final CitizenState state;
+  const AccessCodeCard({super.key, required this.state});
+
+  @override
+  State<AccessCodeCard> createState() => _AccessCodeCardState();
+}
+
+class _AccessCodeCardState extends State<AccessCodeCard> {
+  final _code = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_code.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    await widget.state.submitAccessCode(_code.text);
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+        color: const Color(0xFFE8F0FE),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('کد دسترسی', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('این سرور آزمایشی است. کدی را که مدیر سامانه داده وارد کنید.'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _code,
+              textDirection: TextDirection.ltr,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(border: const OutlineInputBorder(), errorText: widget.state.accessCodeError),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'در حال بررسی…' : 'تأیید')),
+          ]),
+        ),
       );
 }
 
