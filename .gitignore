@@ -14,7 +14,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
-data/
+/data/
+services/core/data/
 
 # Flutter
 .dart_tool/
