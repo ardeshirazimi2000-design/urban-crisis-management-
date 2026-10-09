@@ -36,14 +36,27 @@ export function setToken(t: string | null) {
 
 export const hasToken = () => token !== null;
 
+/**
+ * RFC 4122 v4 UUID. crypto.randomUUID exists only in secure contexts (HTTPS/localhost); the console is also
+ * served over plain HTTP on office LANs, so fall back to crypto.getRandomValues, which works everywhere.
+ */
+export function uuid(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 export function newKey(): string {
-  return "web-" + crypto.randomUUID();
+  return "web-" + uuid();
 }
 
 type Opts = { body?: unknown; idempotent?: boolean | string; query?: Record<string, string | number | undefined> };
 
 export async function api<T>(method: string, path: string, opts: Opts = {}): Promise<T> {
-  const headers: Record<string, string> = { "X-Correlation-ID": crypto.randomUUID() };
+  const headers: Record<string, string> = { "X-Correlation-ID": uuid() };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (opts.idempotent) headers["Idempotency-Key"] = typeof opts.idempotent === "string" ? opts.idempotent : newKey();
