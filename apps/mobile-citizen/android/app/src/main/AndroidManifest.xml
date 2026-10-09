@@ -3,7 +3,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
-        android:label="crisis_citizen"
+        android:label="گزارش بحران"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
