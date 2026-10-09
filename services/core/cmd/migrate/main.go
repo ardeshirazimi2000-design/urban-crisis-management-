@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
@@ -24,7 +25,7 @@ func main() {
 	}
 	logx.Setup(cfg.LogLevel)
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := db.ConnectRetry(ctx, cfg.DatabaseURL, 90*time.Second)
 	if err != nil {
 		slog.Error("db", "err", err.Error())
 		os.Exit(1)

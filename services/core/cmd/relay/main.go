@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
@@ -25,7 +26,7 @@ func main() {
 	logx.Setup(cfg.LogLevel)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := db.ConnectRetry(ctx, cfg.DatabaseURL, 90*time.Second)
 	if err != nil {
 		slog.Error("db", "err", err.Error())
 		os.Exit(1)

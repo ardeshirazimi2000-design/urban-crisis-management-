@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -35,6 +37,27 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return pool, nil
+}
+
+// ConnectRetry keeps trying to connect until the database answers or the timeout expires
+// (containers often start before the database is accepting connections).
+func ConnectRetry(ctx context.Context, url string, timeout time.Duration) (*pgxpool.Pool, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		pool, err := Connect(ctx, url)
+		if err == nil {
+			return pool, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+		slog.Warn("database not ready; retrying", "err", err.Error())
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 // WithTx runs fn in a transaction, committing on nil error and rolling back otherwise.

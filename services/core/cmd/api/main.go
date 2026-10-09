@@ -56,7 +56,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := db.ConnectRetry(ctx, cfg.DatabaseURL, 90*time.Second)
 	if err != nil {
 		return err
 	}
