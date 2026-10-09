@@ -1,11 +1,9 @@
 # Static binaries on an empty (scratch) base: no shell, no package manager, non-root.
-# Only Docker Hub images are used so a registry mirror is enough where gcr.io/ghcr.io are unreachable.
+# Go dependencies are vendored (services/core/vendor), so the build needs no network access;
+# only Docker Hub base images are used, so a registry mirror is enough where gcr.io is unreachable.
 FROM golang:1.24-bookworm AS build
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY} CGO_ENABLED=0 GOTOOLCHAIN=local
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=vendor GOPROXY=off
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
 RUN go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/... \
  && mkdir -p /rootfs/data/objects /rootfs/tmp && chown -R 65532:65532 /rootfs/data /rootfs/tmp

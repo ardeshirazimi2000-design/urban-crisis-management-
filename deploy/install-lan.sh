@@ -16,7 +16,6 @@ BACKUP_DIR=${BACKUP_DIR:-/var/backups/urban-crisis}
 WEB_PORT=${WEB_PORT:-80}
 # Candidate mirrors, tried in order; override with space-separated lists.
 REGISTRY_MIRRORS=${REGISTRY_MIRRORS:-"https://docker.arvancloud.ir https://docker.iranserver.com https://registry.docker.ir"}
-GOPROXY_CANDIDATES=${GOPROXY_CANDIDATES:-"https://proxy.golang.org https://goproxy.io https://goproxy.cn"}
 NPM_CANDIDATES=${NPM_CANDIDATES:-"https://registry.npmjs.org/ https://registry.npmmirror.com/"}
 PIP_CANDIDATES=${PIP_CANDIDATES:-"https://pypi.org/simple https://mirror-pypi.runflare.com/simple"}
 # Testing hooks (not needed on a real server).
@@ -70,7 +69,18 @@ docker compose version >/dev/null 2>&1 || die "docker compose v2 is not availabl
 # ---------------------------------------------------------------------------
 log "Checking access to package sources"
 reachable() { curl -sS -o /dev/null --max-time 12 -w '%{http_code}' "$1" 2>/dev/null | grep -qE '^(2|3|401)'; }
-first_reachable() { local probe_suffix=$1; shift; for c in "$@"; do reachable "${c%/}${probe_suffix}" && { echo "$c"; return 0; }; done; return 1; }
+# Probes download a real package file: some sources answer index requests but refuse downloads (403).
+downloads() { curl -fsSL --max-time 30 -o /dev/null "$1" 2>/dev/null; }
+npm_ok() { downloads "${1%/}/ms/-/ms-2.1.3.tgz"; }
+pip_ok() {
+  local page file
+  page=$(curl -fsSL --max-time 20 "${1%/}/six/" 2>/dev/null) || return 1
+  file=$(python3 -c 'import re,sys,urllib.parse as u
+m=re.search(r"href=\"([^\"]+\.whl)[^\"]*\"", sys.stdin.read())
+print(u.urljoin(sys.argv[1], m.group(1)) if m else "")' "${1%/}/six/" <<<"$page")
+  [[ -n "$file" ]] && downloads "$file"
+}
+first_ok() { local check=$1; shift; for c in "$@"; do "$check" "$c" && { echo "$c"; return 0; }; done; return 1; }
 
 DOCKERHUB_DIRECT=0
 reachable "https://registry-1.docker.io/v2/" && curl -sS -o /dev/null --max-time 12 -w '%{http_code}' \
@@ -81,12 +91,13 @@ if (( ${#WORKING_MIRRORS[@]} )); then ok "Docker registry mirrors: ${WORKING_MIR
 (( DOCKERHUB_DIRECT )) && ok "Docker Hub reachable directly"
 (( DOCKERHUB_DIRECT || ${#WORKING_MIRRORS[@]} )) || die "Neither Docker Hub nor any registry mirror is reachable. Set REGISTRY_MIRRORS=\"https://your-mirror\" or configure a proxy, then re-run."
 
-GOPROXY_URL=$(first_reachable "/github.com/google/uuid/@v/list" $GOPROXY_CANDIDATES) || die "No Go module proxy reachable (tried: $GOPROXY_CANDIDATES)."
-NPM_URL=$(first_reachable "/react" $NPM_CANDIDATES) || die "No npm registry reachable (tried: $NPM_CANDIDATES)."
-PIP_URL=$(first_reachable "/fastapi/" $PIP_CANDIDATES) || die "No Python package index reachable (tried: $PIP_CANDIDATES)."
+# shellcheck disable=SC2086
+NPM_URL=$(first_ok npm_ok $NPM_CANDIDATES) || die "No npm registry allows downloads (tried: $NPM_CANDIDATES). Set NPM_CANDIDATES=\"https://your-mirror/\"."
+# shellcheck disable=SC2086
+PIP_URL=$(first_ok pip_ok $PIP_CANDIDATES) || die "No Python package index allows downloads (tried: $PIP_CANDIDATES). Set PIP_CANDIDATES=\"https://your-mirror/simple\"."
 timeout 60 git ls-remote --exit-code --heads "$REPO_URL" "$BRANCH" >/dev/null 2>&1 \
   || die "Cannot reach the code repository ($REPO_URL, branch $BRANCH). Check access to GitHub."
-ok "Go: $GOPROXY_URL   npm: $NPM_URL   pip: $PIP_URL"
+ok "npm: $NPM_URL   pip: $PIP_URL   (Go packages are bundled in the repository)"
 
 # ---------------------------------------------------------------------------
 if [[ "$SKIP_DOCKER_CONFIG" != 1 ]]; then
@@ -140,7 +151,6 @@ DEV_JWT_SECRET=$DEV_JWT_SECRET
 MEDIA_URL_SECRET=$MEDIA_URL_SECRET
 WEB_BIND=0.0.0.0:$WEB_PORT
 PUBLIC_BASE_URL=$PUBLIC_BASE_URL
-GOPROXY=${GOPROXY_URL%/},direct
 NPM_REGISTRY=$NPM_URL
 PIP_INDEX_URL=$PIP_URL
 EOF

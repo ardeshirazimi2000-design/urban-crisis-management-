@@ -38,9 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: {go-version: "1.24.7", cache-dependency-path: services/core/go.sum}
+        with: {go-version: "1.24.7", cache: false}
+      - name: vendored dependencies match go.mod
+        run: go mod verify && go mod vendor && git diff --exit-code -- vendor
       - name: gofmt
-        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+        run: test -z "$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))" || (gofmt -l $(git ls-files '*.go' | grep -v '^vendor/') && exit 1)
       - run: go vet ./...
       - name: tests (unit, acceptance AT-01..AT-10, OpenAPI + event schema contracts, Kafka round-trip)
         run: go test -race -count=1 ./...

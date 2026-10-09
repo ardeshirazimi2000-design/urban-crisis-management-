@@ -12,7 +12,7 @@ down:
 test: test-core test-ai test-web test-mobile
 
 test-core:
-	cd services/core && gofmt -l . | (! grep .) && go vet ./... && TEST_DATABASE_URL=$(TEST_DATABASE_URL) go test -count=1 ./...
+	cd services/core && gofmt -l $$(git ls-files '*.go' | grep -v '^vendor/') | (! grep .) && go vet ./... && TEST_DATABASE_URL=$(TEST_DATABASE_URL) go test -count=1 ./...
 test-ai:
 	cd services/ai-assist && python -m pytest -q
 test-web:
