@@ -38,9 +38,13 @@ trap 'die "Failed at line $LINENO. Fix the problem above and re-run: sudo bash $
 
 # ---------------------------------------------------------------------------
 log "Detecting network"
-SERVER_IP=${SERVER_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')}
+detect_ip() {
+  { ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'; } || true
+  { hostname -I 2>/dev/null | awk '{print $1}'; } || true
+}
+SERVER_IP=${SERVER_IP:-$(detect_ip | grep -m1 -E '^[0-9.]+$' || true)}
 [[ -n "$SERVER_IP" ]] || die "Could not detect the server IP. Re-run with SERVER_IP=192.168.x.y"
-LAN_CIDR=${LAN_CIDR:-$(ip -o -f inet addr show | awk -v ip="$SERVER_IP" '$4 ~ "^"ip"/" {print $4; exit}')}
+LAN_CIDR=${LAN_CIDR:-$({ ip -o -f inet addr show 2>/dev/null | awk -v ip="$SERVER_IP" '$4 ~ "^"ip"/" {print $4; exit}'; } || true)}
 LAN_CIDR=${LAN_CIDR:-$SERVER_IP/24}
 # Normalise 192.168.1.16/24 -> 192.168.1.0/24
 LAN_CIDR=$(python3 -c "import ipaddress,sys;print(ipaddress.ip_interface(sys.argv[1]).network)" "$LAN_CIDR")
