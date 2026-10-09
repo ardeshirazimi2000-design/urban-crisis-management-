@@ -23,6 +23,15 @@
 | [`tests`](tests) | k6، bash | آزمون بار و تمرین‌های بازیابی |
 | [`docs`](docs) | — | [معماری](docs/architecture.md)، [ADRها](docs/adr/README.md)، [Runbookها](docs/runbooks/README.md)، [مدل تهدید](docs/threat-model.md)، [آزمون‌های پذیرش](docs/acceptance-tests.md)، [تصمیم‌های باز](docs/open-decisions.md) |
 
+## سرور آزمایشی در شبکه دفتر (یک دستور)
+
+روی Ubuntu Server 24.04: راهنمای [docs/deploy-lan.md](docs/deploy-lan.md)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ardeshirazimi2000-design/urban-crisis-management-/claude/urban-crisis-platform-mvp/deploy/install-lan.sh -o install-lan.sh
+sudo bash install-lan.sh
+```
+
 ## اجرای سریع (Docker)
 
 ```bash
