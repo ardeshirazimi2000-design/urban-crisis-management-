@@ -94,7 +94,7 @@ function ReportPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
         <dt>زمان ادعایی رخداد</dt><dd>{fmtTime(r.occurred_at)} <span className="muted small">(ساعت دستگاه؛ قطعی نیست)</span></dd>
         <dt>زمان دریافت</dt><dd>{fmtTime(r.received_at)}</dd>
         <dt>منبع</dt><dd>{t(r.source)}</dd>
-        <dt>موقعیت</dt><dd>{r.location.lat.toFixed(5)}, {r.location.lng.toFixed(5)} — دقت {num(r.location.accuracy_m)} متر ({r.location.precision === "exact" ? "دقیق" : "تقریبی"}، منبع: {r.location.source})</dd>
+        <dt>موقعیت</dt><dd>{r.location.lat.toFixed(5)}, {r.location.lng.toFixed(5)} — دقت {num(r.location.accuracy_m)} متر ({r.location.precision === "exact" ? "دقیق" : "تقریبی"}، منبع: {t(r.location.source)})</dd>
         {r.review_reason && <><dt>دلیل تصمیم</dt><dd>{r.review_reason}</dd></>}
       </dl>
       {r.contact && (

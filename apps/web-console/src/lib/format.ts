@@ -30,6 +30,8 @@ export const L: Record<string, string> = {
   water_outage: "قطع آب", landslide: "رانش زمین", hazmat: "مواد خطرناک", other: "سایر", earthquake: "زلزله", aftershock: "پس‌لرزه",
   // report source
   phone: "تماس تلفنی", citizen_app: "اپ شهروند",
+  // location source
+  gps: "GPS", network: "شبکه", manual: "تعیین دستی روی نقشه",
   // report status
   received: "دریافت‌شده", triage: "تریاژ", under_review: "در حال بررسی", accepted: "تأییدشده", rejected: "ردشده",
   duplicate: "تکراری", linked_to_incident: "پیوند به حادثه",
