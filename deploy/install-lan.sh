@@ -52,7 +52,7 @@ ok "Server IP: $SERVER_IP   LAN: $LAN_CIDR"
 MEM_GB=$(awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo)
 DISK_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 (( MEM_GB >= 7 )) && ok "RAM: ${MEM_GB} GB" || warn "RAM ${MEM_GB} GB — at least 8 GB is recommended."
-(( DISK_GB >= 30 )) && ok "Free disk: ${DISK_GB} GB" || die "Only ${DISK_GB} GB free on /; at least 30 GB is needed."
+(( DISK_GB >= ${MIN_DISK_GB:-30} )) && ok "Free disk: ${DISK_GB} GB" || die "Only ${DISK_GB} GB free on /; at least ${MIN_DISK_GB:-30} GB is needed."
 
 # ---------------------------------------------------------------------------
 if [[ "$SKIP_PACKAGES" != 1 ]]; then
