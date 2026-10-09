@@ -76,3 +76,11 @@ textarea { width: 100%; }
   .split { grid-template-columns: 1fr; } .main { padding: 12px; } .kv { grid-template-columns: 1fr; }
   .table { display: block; overflow-x: auto; }
 }
+
+.phone-form { display: flex; flex-direction: column; gap: 10px; }
+.phone-form label.full { display: flex; }
+.phone-form label.full input, .phone-form label.full textarea { width: 100%; }
+.caller { border: 1px solid var(--border); border-radius: 8px; }
+.caller legend { font-size: 12px; color: var(--muted); }
+.caller-box { background: var(--warn-bg); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.map.picker { cursor: crosshair; }

@@ -28,6 +28,8 @@ export const L: Record<string, string> = {
   structural_damage: "آسیب سازه‌ای", building_collapse: "ریزش ساختمان", trapped_people: "افراد محبوس", injury: "مصدومیت",
   fire: "آتش‌سوزی", gas_leak: "نشت گاز", road_blocked: "انسداد مسیر", flooding: "آب‌گرفتگی", power_outage: "قطع برق",
   water_outage: "قطع آب", landslide: "رانش زمین", hazmat: "مواد خطرناک", other: "سایر", earthquake: "زلزله", aftershock: "پس‌لرزه",
+  // report source
+  phone: "تماس تلفنی", citizen_app: "اپ شهروند",
   // report status
   received: "دریافت‌شده", triage: "تریاژ", under_review: "در حال بررسی", accepted: "تأییدشده", rejected: "ردشده",
   duplicate: "تکراری", linked_to_incident: "پیوند به حادثه",

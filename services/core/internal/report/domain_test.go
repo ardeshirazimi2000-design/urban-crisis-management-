@@ -97,3 +97,45 @@ func TestReviewRequiresReasonForRejection(t *testing.T) {
 		t.Fatal("duplicate needs duplicate_of")
 	}
 }
+
+func TestNormalizePhone(t *testing.T) {
+	cases := map[string]string{"۰۹۱۲ ۱۲۳-۴۵۶۷": "09121234567", "+98 912 123 4567": "+989121234567", "٠٢١-٨٨٨٨": "0218888", "abc": ""}
+	for in, want := range cases {
+		if got := NormalizePhone(in); got != want {
+			t.Errorf("%q: want %q got %q", in, want, got)
+		}
+	}
+}
+
+func TestPhoneValidation(t *testing.T) {
+	now := time.Date(2026, 10, 8, 20, 0, 0, 0, time.UTC)
+	base := func() PhoneRequest { return PhoneRequest{CreateRequest: valid()} }
+	r := base()
+	r.Normalize()
+	if err := r.Validate(tehran, now); err != nil || r.Location.Source != "manual" {
+		t.Fatalf("valid phone report rejected: %v (source %s)", reasons(err), r.Location.Source)
+	}
+	r = base()
+	r.CallbackRequested = true
+	r.Normalize()
+	if !contains(reasons(r.Validate(tehran, now)), "caller_phone:required_for_callback") {
+		t.Fatal("callback without phone must fail")
+	}
+	r = base()
+	r.CallerPhone = "12"
+	r.Location.Lat = 10
+	r.Normalize()
+	got := reasons(r.Validate(tehran, now))
+	if !contains(got, "caller_phone:invalid") || !contains(got, "location:outside_service_area") {
+		t.Fatalf("expected both phone and location errors, got %v", got)
+	}
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}

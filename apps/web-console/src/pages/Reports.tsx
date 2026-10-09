@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 import { MapView } from "../components/MapView";
+import { PhoneReportForm } from "./PhoneReport";
 
 const QUEUE_STATUSES = ["", "received", "triage", "under_review", "accepted", "rejected", "duplicate", "linked_to_incident"];
 
@@ -12,11 +13,16 @@ export function ReportsPage() {
   const [status, setStatus] = useState("received");
   const [type, setType] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [intake, setIntake] = useState(false);
+  const { can } = useSession();
   const list = usePoll(() => api<{ items: Report[]; next_cursor?: string }>("GET", "/reports", { query: { status, type, limit: 100 } }), 10000, [status, type]);
 
   return (
     <div className="split">
-      <Section title="صف بررسی گزارش‌ها" actions={<Freshness at={list.updatedAt} />}>
+      <Section title="صف بررسی گزارش‌ها" actions={<>
+        <Freshness at={list.updatedAt} />
+        {can("report:intake") && <button className="btn primary small" onClick={() => { setIntake(true); setSelected(null); }}>ثبت گزارش تلفنی</button>}
+      </>}>
         <div className="row gap wrap filters">
           <label>وضعیت
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -33,11 +39,12 @@ export function ReportsPage() {
         <ErrorBox error={list.error} />
         {list.data?.items.length === 0 && <Empty>گزارشی در این وضعیت نیست.</Empty>}
         <table className="table">
-          <thead><tr><th>نوع</th><th>وضعیت</th><th>شدت</th><th>دریافت</th><th>دقت مکان</th><th>رسانه</th><th>AI</th></tr></thead>
+          <thead><tr><th>نوع</th><th>منبع</th><th>وضعیت</th><th>شدت</th><th>دریافت</th><th>دقت مکان</th><th>رسانه</th><th>AI</th></tr></thead>
           <tbody>
             {list.data?.items.map((r) => (
-              <tr key={r.id} className={selected === r.id ? "sel" : ""} onClick={() => setSelected(r.id)}>
+              <tr key={r.id} className={selected === r.id ? "sel" : ""} onClick={() => { setSelected(r.id); setIntake(false); }}>
                 <td>{t(r.type)}</td>
+                <td className="small">{t(r.source)}</td>
                 <td><Badge value={r.status} /></td>
                 <td>{r.severity ? <Badge value={r.severity} /> : "—"}</td>
                 <td title={fmtTime(r.received_at)}>{ago(r.received_at)}</td>
@@ -49,7 +56,13 @@ export function ReportsPage() {
           </tbody>
         </table>
       </Section>
-      {selected ? <ReportPanel id={selected} onChanged={list.reload} key={selected} /> : <Section title="جزئیات"><Empty>یک گزارش را انتخاب کنید.</Empty></Section>}
+      {intake ? (
+        <PhoneReportForm onClose={() => setIntake(false)} onCreated={() => void list.reload()} />
+      ) : selected ? (
+        <ReportPanel id={selected} onChanged={list.reload} key={selected} />
+      ) : (
+        <Section title="جزئیات"><Empty>یک گزارش را انتخاب کنید.</Empty></Section>
+      )}
     </div>
   );
 }
@@ -80,9 +93,21 @@ function ReportPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
         <dt>شرح</dt><dd className="pre">{r.description || "—"}</dd>
         <dt>زمان ادعایی رخداد</dt><dd>{fmtTime(r.occurred_at)} <span className="muted small">(ساعت دستگاه؛ قطعی نیست)</span></dd>
         <dt>زمان دریافت</dt><dd>{fmtTime(r.received_at)}</dd>
+        <dt>منبع</dt><dd>{t(r.source)}</dd>
         <dt>موقعیت</dt><dd>{r.location.lat.toFixed(5)}, {r.location.lng.toFixed(5)} — دقت {num(r.location.accuracy_m)} متر ({r.location.precision === "exact" ? "دقیق" : "تقریبی"}، منبع: {r.location.source})</dd>
         {r.review_reason && <><dt>دلیل تصمیم</dt><dd>{r.review_reason}</dd></>}
       </dl>
+      {r.contact && (
+        <div className="caller-box">
+          <strong>تماس‌گیرنده</strong> <span className="muted small">(اطلاعات شخصی)</span>
+          <dl className="kv">
+            <dt>نام</dt><dd>{r.contact.caller_name ?? "—"}</dd>
+            <dt>شماره</dt><dd dir="ltr" style={{ textAlign: "end" }}>{r.contact.caller_phone ?? "—"}</dd>
+            <dt>نشانی گفته‌شده</dt><dd>{r.contact.address_text ?? "—"}</dd>
+          </dl>
+          {r.contact.callback_requested && <div className="warn">تماس‌گیرنده درخواست تماس مجدد دارد.</div>}
+        </div>
+      )}
       <MapView height={220} center={[r.location.lat, r.location.lng]} zoom={15}
         features={[{ type: "Feature", id: r.id, geometry: { type: "Point", coordinates: [r.location.lng, r.location.lat] }, properties: { layer: "reports", status: r.status, report_type: r.type } }]} />
 

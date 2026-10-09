@@ -12,6 +12,7 @@ type Permission string
 
 const (
 	ReportCreate       Permission = "report:create"
+	ReportIntake       Permission = "report:intake" // record a report on behalf of a caller (phone intake)
 	ReportReadOwn      Permission = "report:read_own"
 	ReportRead         Permission = "report:read"
 	ReportReadPrecise  Permission = "report:read_precise" // exact citizen coordinates
@@ -57,9 +58,9 @@ const (
 var RolePermissions = map[Role][]Permission{
 	RoleCitizen:   {ReportCreate, ReportReadOwn, AlertReadPublic},
 	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead},
-	RoleOperator: {ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
+	RoleOperator: {ReportIntake, ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
 		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic},
-	RoleCommander: {ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
+	RoleCommander: {ReportIntake, ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
 		IncidentApprove, IncidentLinkReport, GISRead, ResourceRead, ResourceAllocate, AlertDraft, AlertApprove,
 		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic},
 	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic},

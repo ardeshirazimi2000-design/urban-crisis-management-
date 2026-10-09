@@ -65,6 +65,33 @@ paths:
       responses:
         "200": {description: page, content: {application/json: {schema: {$ref: "#/components/schemas/ReportPage"}}}}
         "403": {$ref: "#/components/responses/Error"}
+  /api/v1/reports/phone:
+    post:
+      tags: [reports]
+      summary: Operator records a report from a phone call (enters the normal review queue; not auto-accepted)
+      description: |
+        Location is the operator's estimate (source is forced to "manual"); media is not accepted.
+        Caller details are stored separately as personal data, returned in report detail only to roles with
+        report:read_precise, and never included in events or logs. Phone digits may be Persian; they are normalised.
+      x-permission: report:intake
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: "#/components/schemas/ReportCreate"}
+                - type: object
+                  properties:
+                    caller_name: {type: string, maxLength: 100}
+                    caller_phone: {type: string, description: "4–15 digits, optional leading +; required when callback_requested"}
+                    callback_requested: {type: boolean}
+                    address_text: {type: string, maxLength: 300, description: Address as described by the caller}
+      responses:
+        "202": {description: accepted, content: {application/json: {schema: {$ref: "#/components/schemas/ReportReceipt"}}}}
+        "403": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}
   /api/v1/reports/mine:
     get:
       summary: "GET /reports/mine"

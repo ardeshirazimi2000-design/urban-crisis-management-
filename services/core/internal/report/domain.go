@@ -3,6 +3,7 @@
 package report
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -110,4 +111,70 @@ func (req *ReviewRequest) Validate() error {
 	v.Check(req.Decision != StatusDuplicate || req.DuplicateOf != nil, "duplicate_of", "required")
 	v.Check(req.Version > 0, "version", "required")
 	return v.Err()
+}
+
+// PhoneRequest is a report taken by an operator from a phone call. The location is the operator's best
+// estimate (usually picked on the map from the caller's description), so its source is always "manual".
+type PhoneRequest struct {
+	CreateRequest
+	CallerName        string `json:"caller_name"`
+	CallerPhone       string `json:"caller_phone"`
+	CallbackRequested bool   `json:"callback_requested"`
+	AddressText       string `json:"address_text"`
+}
+
+var phoneRe = regexp.MustCompile(`^\+?[0-9]{4,15}$`)
+
+// NormalizePhone converts Persian/Arabic digits and strips separators: "۰۹۱۲ ۱۲۳-۴۵۶۷" -> "09121234567".
+func NormalizePhone(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= '۰' && r <= '۹':
+			b.WriteRune('0' + (r - '۰'))
+		case r >= '٠' && r <= '٩':
+			b.WriteRune('0' + (r - '٠'))
+		case (r >= '0' && r <= '9') || (r == '+' && b.Len() == 0):
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func (req *PhoneRequest) Normalize() {
+	req.CreateRequest.Normalize()
+	req.Location.Source = "manual"
+	req.CallerName = strings.TrimSpace(req.CallerName)
+	req.AddressText = strings.TrimSpace(req.AddressText)
+	req.CallerPhone = NormalizePhone(req.CallerPhone)
+}
+
+func (req *PhoneRequest) Validate(area gis.Area, now time.Time) error {
+	var v httpx.Validator
+	if err := req.CreateRequest.Validate(area, now); err != nil {
+		if he, ok := err.(*httpx.Error); ok {
+			v = httpx.Validator{}
+			for _, d := range he.Details {
+				v.Check(false, d.Field, d.Reason)
+			}
+		} else {
+			return err
+		}
+	}
+	v.Check(len(req.MediaIDs) == 0, "media_ids", "not_supported_for_phone_intake")
+	v.Check(utf8.RuneCountInString(req.CallerName) <= 100, "caller_name", "too_long")
+	v.Check(req.CallerPhone == "" || phoneRe.MatchString(req.CallerPhone), "caller_phone", "invalid")
+	v.Check(!req.CallbackRequested || req.CallerPhone != "", "caller_phone", "required_for_callback")
+	v.Check(utf8.RuneCountInString(req.AddressText) <= 300, "address_text", "too_long")
+	return v.Err()
+}
+
+// Contact is the caller information shown to roles allowed to see precise locations.
+type Contact struct {
+	CallerName        *string   `json:"caller_name"`
+	CallerPhone       *string   `json:"caller_phone"`
+	CallbackRequested bool      `json:"callback_requested"`
+	AddressText       *string   `json:"address_text"`
+	RecordedBy        uuid.UUID `json:"recorded_by"`
+	CreatedAt         time.Time `json:"created_at"`
 }

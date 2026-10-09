@@ -100,7 +100,12 @@ export type Report = {
   duplicate_of?: string; reviewer_id?: string; review_reason?: string; reviewed_at?: string; media_count: number; version: number;
 };
 export type AIScore = { model_version: string; predicted_type: string | null; type_confidence: number | null; urgency_signal: number | null; signals: Record<string, unknown>; created_at: string; note: string };
+export type CallerContact = {
+  caller_name: string | null; caller_phone: string | null; callback_requested: boolean;
+  address_text: string | null; recorded_by: string; created_at: string;
+};
 export type ReportDetail = Report & {
+  contact?: CallerContact;
   media: { media_id: string; content_type: string; bytes: number; scan_status: string }[];
   ai_scores: AIScore[];
   history: { event_type: string; actor_id: string | null; payload: Record<string, unknown>; created_at: string }[];

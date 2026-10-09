@@ -40,6 +40,7 @@ func (m *Module) now() time.Time {
 
 func (m *Module) Routes(r *httpx.Router) {
 	r.Auth("POST /reports", m.create)
+	r.Auth("POST /reports/phone", m.createPhone)
 	r.Auth("GET /reports", m.list)
 	r.Auth("GET /reports/mine", m.listMine)
 	r.Auth("GET /reports/{id}", m.get)
@@ -141,46 +142,10 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) error {
 		if err != nil || replay != nil {
 			return err
 		}
-		id := uuid.New()
-		var receivedAt time.Time
-		err := tx.QueryRow(ctx, `INSERT INTO reports (id, reporter_ref, type, description, occurred_at, location, accuracy_m, location_source)
-			VALUES ($1,$2,$3,$4,$5,`+fmt.Sprintf(gis.PointSQL, "$6", "$7")+`,$8,$9) RETURNING received_at`,
-			id, p.UserID, req.Type, req.Description, req.OccurredAt, req.Location.Lng, req.Location.Lat,
-			req.Location.AccuracyM, req.Location.Source).Scan(&receivedAt)
+		resp, err = insertReport(ctx, tx, p.UserID, "citizen_app", req)
 		if err != nil {
 			return err
 		}
-		if err := media.AttachToReport(ctx, tx, p.UserID, id, req.MediaIDs); err != nil {
-			return err
-		}
-		var dups int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM reports o, reports n
-			WHERE n.id = $1 AND o.id <> n.id AND o.type = n.type
-			  AND o.status NOT IN ('rejected') AND o.received_at > n.received_at - $3::interval
-			  AND ST_DWithin(o.location, n.location, $2)`, id, DuplicateRadiusM,
-			fmt.Sprintf("%d seconds", int(DuplicateWindow.Seconds()))).Scan(&dups); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO report_events (report_id, event_type, actor_id, payload, correlation_id)
-			VALUES ($1, 'created', $2, $3, $4)`, id, p.UserID,
-			map[string]any{"possible_duplicates": dups, "media": len(req.MediaIDs)}, httpx.CorrelationID(ctx)); err != nil {
-			return err
-		}
-		// Event payload is minimised: no reporter identity, no media; description is capped
-		// (needed by the AI assist classifier; topic ACLs restrict consumers).
-		if _, err := outbox.Enqueue(ctx, tx, outbox.Event{
-			Type: "report.created", Aggregate: outbox.Aggregate{Type: "report", ID: id, Version: 1}, OccurredAt: receivedAt,
-			Payload: map[string]any{
-				"report_id": id, "report_type": req.Type, "description": truncateRunes(req.Description, 1000),
-				"location":    map[string]any{"lat": req.Location.Lat, "lng": req.Location.Lng, "accuracy_m": req.Location.AccuracyM},
-				"occurred_at": req.OccurredAt, "received_at": receivedAt, "media_count": len(req.MediaIDs),
-				"possible_duplicates": dups,
-			},
-		}); err != nil {
-			return err
-		}
-		resp = createResponse{ReportID: id, Status: StatusReceived, ReceivedAt: receivedAt,
-			CorrelationID: httpx.CorrelationID(ctx), PossibleDuplicates: dups}
 		return idempotency.Complete(ctx, tx, p.UserID, "POST /reports", key, http.StatusAccepted, resp)
 	})
 	if err != nil {
@@ -192,6 +157,105 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) error {
 	}
 	httpx.JSON(w, http.StatusAccepted, resp)
 	return nil
+}
+
+// createPhone records a report taken by an operator from a phone call. It enters the same review queue as
+// citizen reports (it is not auto-accepted); the caller's details are stored separately as personal data.
+func (m *Module) createPhone(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	if err := m.Guard.Require(ctx, auth.ReportIntake, "report", ""); err != nil {
+		return err
+	}
+	p := auth.FromContext(ctx)
+	key, err := idempotency.Key(r)
+	if err != nil {
+		return err
+	}
+	var req PhoneRequest
+	if err := httpx.DecodeJSON(w, r, &req, 16<<10); err != nil {
+		return err
+	}
+	req.Normalize()
+	if err := req.Validate(m.Area, m.now().UTC()); err != nil {
+		return err
+	}
+	var resp createResponse
+	var replay *idempotency.Stored
+	err = db.WithTx(ctx, m.Pool, func(tx pgx.Tx) error {
+		replay, err = idempotency.Begin(ctx, tx, p.UserID, "POST /reports/phone", key, idempotency.Hash(req))
+		if err != nil || replay != nil {
+			return err
+		}
+		if resp, err = insertReport(ctx, tx, p.UserID, "phone", req.CreateRequest); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO report_contacts (report_id, caller_name, caller_phone, callback_requested, address_text, recorded_by)
+			VALUES ($1, NULLIF($2,''), NULLIF($3,''), $4, NULLIF($5,''), $6)`,
+			resp.ReportID, req.CallerName, req.CallerPhone, req.CallbackRequested, req.AddressText, p.UserID); err != nil {
+			return err
+		}
+		if err := audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "report.phone_intake",
+			TargetType: "report", TargetID: resp.ReportID.String(), Outcome: "success",
+			Details:       map[string]any{"type": req.Type, "callback_requested": req.CallbackRequested, "has_caller_phone": req.CallerPhone != ""},
+			CorrelationID: httpx.CorrelationID(ctx)}); err != nil {
+			return err
+		}
+		return idempotency.Complete(ctx, tx, p.UserID, "POST /reports/phone", key, http.StatusAccepted, resp)
+	})
+	if err != nil {
+		return err
+	}
+	if replay != nil {
+		replay.Write(w)
+		return nil
+	}
+	httpx.JSON(w, http.StatusAccepted, resp)
+	return nil
+}
+
+// insertReport persists a validated report with its media links, history entry and report.created outbox event
+// inside tx. source records the intake channel (citizen_app | phone).
+func insertReport(ctx context.Context, tx pgx.Tx, reporter uuid.UUID, source string, req CreateRequest) (createResponse, error) {
+	id := uuid.New()
+	var receivedAt time.Time
+	err := tx.QueryRow(ctx, `INSERT INTO reports (id, reporter_ref, source, type, description, occurred_at, location, accuracy_m, location_source)
+		VALUES ($1,$2,$3,$4,$5,$6,`+fmt.Sprintf(gis.PointSQL, "$7", "$8")+`,$9,$10) RETURNING received_at`,
+		id, reporter, source, req.Type, req.Description, req.OccurredAt, req.Location.Lng, req.Location.Lat,
+		req.Location.AccuracyM, req.Location.Source).Scan(&receivedAt)
+	if err != nil {
+		return createResponse{}, err
+	}
+	if err := media.AttachToReport(ctx, tx, reporter, id, req.MediaIDs); err != nil {
+		return createResponse{}, err
+	}
+	var dups int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM reports o, reports n
+		WHERE n.id = $1 AND o.id <> n.id AND o.type = n.type
+		  AND o.status NOT IN ('rejected') AND o.received_at > n.received_at - $3::interval
+		  AND ST_DWithin(o.location, n.location, $2)`, id, DuplicateRadiusM,
+		fmt.Sprintf("%d seconds", int(DuplicateWindow.Seconds()))).Scan(&dups); err != nil {
+		return createResponse{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO report_events (report_id, event_type, actor_id, payload, correlation_id)
+		VALUES ($1, 'created', $2, $3, $4)`, id, reporter,
+		map[string]any{"possible_duplicates": dups, "media": len(req.MediaIDs), "source": source}, httpx.CorrelationID(ctx)); err != nil {
+		return createResponse{}, err
+	}
+	// Event payload is minimised: no reporter or caller identity, no media; description is capped
+	// (needed by the AI assist classifier; topic ACLs restrict consumers).
+	if _, err := outbox.Enqueue(ctx, tx, outbox.Event{
+		Type: "report.created", Aggregate: outbox.Aggregate{Type: "report", ID: id, Version: 1}, OccurredAt: receivedAt,
+		Payload: map[string]any{
+			"report_id": id, "report_type": req.Type, "source": source, "description": truncateRunes(req.Description, 1000),
+			"location":    map[string]any{"lat": req.Location.Lat, "lng": req.Location.Lng, "accuracy_m": req.Location.AccuracyM},
+			"occurred_at": req.OccurredAt, "received_at": receivedAt, "media_count": len(req.MediaIDs),
+			"possible_duplicates": dups,
+		},
+	}); err != nil {
+		return createResponse{}, err
+	}
+	return createResponse{ReportID: id, Status: StatusReceived, ReceivedAt: receivedAt,
+		CorrelationID: httpx.CorrelationID(ctx), PossibleDuplicates: dups}, nil
 }
 
 func truncateRunes(s string, n int) string {
@@ -318,6 +382,7 @@ type HistoryEntry struct {
 
 type detail struct {
 	Report
+	Contact   *Contact         `json:"contact,omitempty"`
 	Media     []media.Media    `json:"media"`
 	AIScores  []AIScore        `json:"ai_scores"`
 	History   []HistoryEntry   `json:"history"`
@@ -350,6 +415,18 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) error {
 	d := detail{Report: present(p, rp), AIScores: []AIScore{}, History: []HistoryEntry{}, Incidents: []map[string]any{}}
 	if d.Media, err = media.ListForReport(ctx, m.Pool, id); err != nil {
 		return err
+	}
+	// Caller details (phone intake) are personal data: only for roles that may see precise locations.
+	if rp.Source == "phone" && p.Has(auth.ReportReadPrecise) {
+		var c Contact
+		err := m.Pool.QueryRow(ctx, `SELECT caller_name, caller_phone, callback_requested, address_text, recorded_by, created_at
+			FROM report_contacts WHERE report_id=$1`, id).Scan(&c.CallerName, &c.CallerPhone, &c.CallbackRequested,
+			&c.AddressText, &c.RecordedBy, &c.CreatedAt)
+		if err == nil {
+			d.Contact = &c
+		} else if err != pgx.ErrNoRows {
+			return err
+		}
 	}
 	if p.Has(auth.ReportRead) {
 		rows, err := m.Pool.Query(ctx, `SELECT model_version, predicted_type, type_confidence, urgency_signal, signals, created_at

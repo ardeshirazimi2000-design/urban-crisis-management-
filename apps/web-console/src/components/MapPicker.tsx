@@ -1,0 +1,32 @@
+import { Circle, CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import { TEHRAN } from "./MapView";
+
+const TILE_URL = (import.meta.env.VITE_TILE_URL as string | undefined) ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTR = (import.meta.env.VITE_TILE_ATTRIBUTION as string | undefined) ?? "&copy; OpenStreetMap contributors";
+
+export type PickedPoint = { lat: number; lng: number };
+
+function ClickHandler({ onPick }: { onPick: (p: PickedPoint) => void }) {
+  useMapEvents({ click: (e) => onPick({ lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6) }) });
+  return null;
+}
+
+/** Click-to-place location picker; the dashed circle shows the estimated accuracy. */
+export function MapPicker({ value, accuracyM, onPick, height = 300 }: {
+  value: PickedPoint | null; accuracyM: number; onPick: (p: PickedPoint) => void; height?: number;
+}) {
+  return (
+    <div style={{ height }} className="map picker" dir="ltr" data-testid="map-picker">
+      <MapContainer center={value ? [value.lat, value.lng] : TEHRAN} zoom={12} style={{ height: "100%" }}>
+        <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
+        <ClickHandler onPick={onPick} />
+        {value && (
+          <>
+            <Circle center={[value.lat, value.lng]} radius={accuracyM} pathOptions={{ color: "#d97706", dashArray: "6 6", fillOpacity: 0.08 }} />
+            <CircleMarker center={[value.lat, value.lng]} radius={8} pathOptions={{ color: "#d97706", fillOpacity: 0.9 }} />
+          </>
+        )}
+      </MapContainer>
+    </div>
+  );
+}
