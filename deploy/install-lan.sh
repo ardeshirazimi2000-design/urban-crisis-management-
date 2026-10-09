@@ -84,7 +84,8 @@ if (( ${#WORKING_MIRRORS[@]} )); then ok "Docker registry mirrors: ${WORKING_MIR
 GOPROXY_URL=$(first_reachable "/github.com/google/uuid/@v/list" $GOPROXY_CANDIDATES) || die "No Go module proxy reachable (tried: $GOPROXY_CANDIDATES)."
 NPM_URL=$(first_reachable "/react" $NPM_CANDIDATES) || die "No npm registry reachable (tried: $NPM_CANDIDATES)."
 PIP_URL=$(first_reachable "/fastapi/" $PIP_CANDIDATES) || die "No Python package index reachable (tried: $PIP_CANDIDATES)."
-reachable "$REPO_URL" || reachable "https://github.com" || die "GitHub is not reachable; the code cannot be downloaded."
+timeout 60 git ls-remote --exit-code --heads "$REPO_URL" "$BRANCH" >/dev/null 2>&1 \
+  || die "Cannot reach the code repository ($REPO_URL, branch $BRANCH). Check access to GitHub."
 ok "Go: $GOPROXY_URL   npm: $NPM_URL   pip: $PIP_URL"
 
 # ---------------------------------------------------------------------------
