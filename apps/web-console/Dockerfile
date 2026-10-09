@@ -1,7 +1,8 @@
 FROM node:22-bookworm-slim AS build
+ARG NPM_REGISTRY=https://registry.npmjs.org/
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm config set registry "${NPM_REGISTRY}" && npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

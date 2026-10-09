@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // embedded zone data: Asia/Tehran without OS tzdata
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/notification"

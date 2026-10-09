@@ -1,6 +1,12 @@
-# Local development stack. `depends_on` + healthchecks give readiness ordering, not just start order.
-# Usage: cp .env.example .env && docker compose up --build   → console http://localhost:8081
+# Single-server stack (local development or an office test server).
+#   cp .env.example .env && docker compose up -d --build      → console http://localhost:8081
+# For a LAN test server use deploy/install-lan.sh, which writes .env and sets WEB_BIND / PUBLIC_BASE_URL.
 name: urban-crisis
+
+x-core-build: &core-build
+  context: ./services/core
+  args:
+    GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
 
 x-core-env: &core-env
   APP_ENV: ${APP_ENV:-local}
@@ -11,13 +17,16 @@ x-core-env: &core-env
   MEDIA_ALLOW_UNSCANNED: "true"
   EVENT_PUBLISHER: kafka
   KAFKA_BROKERS: kafka:9092
-  OBJECT_STORE: s3
-  OBJECT_STORAGE_ENDPOINT: minio:9000
-  OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-crisis}
-  OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
-  OBJECT_STORAGE_BUCKET: crisis-media
+  # Media on a private volume; downloads use short-lived signed URLs served through the web proxy.
+  OBJECT_STORE: fs
+  OBJECT_STORE_DIR: /data/objects
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8081}
   CORS_ORIGINS: http://localhost:5173
   LOG_LEVEL: info
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "20m", max-file: "5"}
 
 services:
   postgres:
@@ -31,7 +40,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U crisis -d crisis"]
       interval: 5s
-      retries: 20
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
 
   kafka:
     image: apache/kafka:3.7.1
@@ -46,86 +57,85 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    volumes: [kafkadata:/var/lib/kafka/data]
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
       interval: 10s
-      retries: 20
-
-  minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-crisis}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
-    ports: ["127.0.0.1:9001:9001"]
-    volumes: [miniodata:/data]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      retries: 20
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
 
   migrate:
-    build: ./services/core
+    build: *core-build
     entrypoint: ["/app/migrate", "-seed"]
     environment: *core-env
     depends_on: {postgres: {condition: service_healthy}}
     restart: "no"
 
   api:
-    build: ./services/core
+    build: *core-build
     entrypoint: ["/app/api"]
     environment: *core-env
     ports: ["127.0.0.1:8080:8080"]
+    volumes: [objects:/data/objects]
     depends_on:
       migrate: {condition: service_completed_successfully}
-      minio: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "/app/api", "-healthcheck"]
       interval: 10s
       retries: 10
+    restart: unless-stopped
+    logging: *logging
 
   relay:
-    build: ./services/core
+    build: *core-build
     entrypoint: ["/app/relay"]
     environment: *core-env
     depends_on:
       migrate: {condition: service_completed_successfully}
       kafka: {condition: service_healthy}
     restart: unless-stopped
+    logging: *logging
 
   notifier:
-    build: ./services/core
+    build: *core-build
     entrypoint: ["/app/notifier"]
     environment: *core-env
     depends_on: {migrate: {condition: service_completed_successfully}}
     restart: unless-stopped
+    logging: *logging
 
   consumer:
-    build: ./services/core
+    build: *core-build
     entrypoint: ["/app/consumer"]
     environment: *core-env
     depends_on:
       migrate: {condition: service_completed_successfully}
       kafka: {condition: service_healthy}
     restart: unless-stopped
+    logging: *logging
 
   ai-worker:
-    build: ./services/ai-assist
+    build:
+      context: ./services/ai-assist
+      args: {PIP_INDEX_URL: "${PIP_INDEX_URL:-https://pypi.org/simple}"}
     environment:
       KAFKA_BROKERS: kafka:9092
     depends_on: {kafka: {condition: service_healthy}}
     restart: unless-stopped
-
-  ai-api:
-    build: ./services/ai-assist
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    ports: ["127.0.0.1:8000:8000"]
+    logging: *logging
 
   web:
-    build: ./apps/web-console
-    ports: ["127.0.0.1:8081:8080"]
+    build:
+      context: ./apps/web-console
+      args: {NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmjs.org/}"}
+    ports: ["${WEB_BIND:-127.0.0.1:8081}:8080"]
     depends_on: {api: {condition: service_healthy}}
+    restart: unless-stopped
+    logging: *logging
 
 volumes:
   pgdata:
-  miniodata:
+  kafkadata:
+  objects:
