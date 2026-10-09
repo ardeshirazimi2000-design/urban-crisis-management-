@@ -19,13 +19,17 @@ type Config struct {
 	AutoMigrate bool
 
 	// Auth: "dev" (HS256 shared secret, local only) or "oidc" (JWKS from issuer).
-	AuthMode        string
-	DevJWTSecret    string
-	OIDCIssuerURL   string
-	OIDCAudience    string
-	OIDCJWKSURL     string
-	PrincipalTTL    time.Duration
-	BootstrapAdmins []string // OIDC subjects that receive SECURITY_ADMIN on first sight
+	AuthMode     string
+	DevJWTSecret string
+	// Optional access codes for the dev sign-in (a test server reachable from the Internet). When the staff code
+	// is set, /dev/token requires a code: the staff code may request any role, the citizen code only CITIZEN.
+	DevAccessCodeStaff   string
+	DevAccessCodeCitizen string
+	OIDCIssuerURL        string
+	OIDCAudience         string
+	OIDCJWKSURL          string
+	PrincipalTTL         time.Duration
+	BootstrapAdmins      []string // OIDC subjects that receive SECURITY_ADMIN on first sight
 
 	KafkaBrokers []string
 	TopicPrefix  string
@@ -68,13 +72,15 @@ func Load() (Config, error) {
 		DatabaseURL: env("DATABASE_URL", "postgres://crisis:local-only@localhost:5432/crisis?sslmode=disable"),
 		AutoMigrate: envBool("AUTO_MIGRATE", false),
 
-		AuthMode:        env("AUTH_MODE", "dev"),
-		DevJWTSecret:    env("DEV_JWT_SECRET", ""),
-		OIDCIssuerURL:   env("OIDC_ISSUER_URL", ""),
-		OIDCAudience:    env("OIDC_AUDIENCE", "crisis-api"),
-		OIDCJWKSURL:     env("OIDC_JWKS_URL", ""),
-		PrincipalTTL:    envDuration("PRINCIPAL_CACHE_TTL", 30*time.Second),
-		BootstrapAdmins: envList("BOOTSTRAP_SECURITY_ADMIN_SUBJECTS"),
+		AuthMode:             env("AUTH_MODE", "dev"),
+		DevJWTSecret:         env("DEV_JWT_SECRET", ""),
+		DevAccessCodeStaff:   env("DEV_ACCESS_CODE_STAFF", ""),
+		DevAccessCodeCitizen: env("DEV_ACCESS_CODE_CITIZEN", ""),
+		OIDCIssuerURL:        env("OIDC_ISSUER_URL", ""),
+		OIDCAudience:         env("OIDC_AUDIENCE", "crisis-api"),
+		OIDCJWKSURL:          env("OIDC_JWKS_URL", ""),
+		PrincipalTTL:         envDuration("PRINCIPAL_CACHE_TTL", 30*time.Second),
+		BootstrapAdmins:      envList("BOOTSTRAP_SECURITY_ADMIN_SUBJECTS"),
 
 		KafkaBrokers: envList("KAFKA_BROKERS"),
 		TopicPrefix:  env("KAFKA_TOPIC_PREFIX", "crisis."),
@@ -111,6 +117,8 @@ func Load() (Config, error) {
 
 		CORSOrigins: envList("CORS_ORIGINS"),
 	}
+	// "/" means relative media URLs, so the console works whichever address (LAN or public) it was opened on.
+	c.PublicBaseURL = strings.TrimRight(c.PublicBaseURL, "/")
 	return c, c.validate()
 }
 
@@ -124,6 +132,17 @@ func (c Config) validate() error {
 		}
 		if len(c.DevJWTSecret) < 32 {
 			return fmt.Errorf("DEV_JWT_SECRET must be at least 32 characters")
+		}
+		if c.DevAccessCodeCitizen != "" && c.DevAccessCodeStaff == "" {
+			return fmt.Errorf("DEV_ACCESS_CODE_CITIZEN requires DEV_ACCESS_CODE_STAFF")
+		}
+		for _, code := range []string{c.DevAccessCodeStaff, c.DevAccessCodeCitizen} {
+			if code != "" && len(code) < 8 {
+				return fmt.Errorf("dev access codes must be at least 8 characters")
+			}
+		}
+		if c.DevAccessCodeStaff != "" && c.DevAccessCodeStaff == c.DevAccessCodeCitizen {
+			return fmt.Errorf("DEV_ACCESS_CODE_STAFF and DEV_ACCESS_CODE_CITIZEN must differ")
 		}
 	case "oidc":
 		if c.OIDCIssuerURL == "" {

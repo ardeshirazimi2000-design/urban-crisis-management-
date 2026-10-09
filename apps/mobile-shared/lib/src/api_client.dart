@@ -81,9 +81,15 @@ class ApiClient {
     return (d['items'] as List).map((e) => Assignment.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// Local development login (API must run with APP_ENV=local, AUTH_MODE=dev).
-  Future<String> devToken(String subject, String name, List<Map<String, String>> grants) async {
-    final d = await request('POST', '/dev/token', body: {'subject': subject, 'name': name, 'grants': grants}) as Map<String, dynamic>;
+  /// Local development login (API must run with APP_ENV=local, AUTH_MODE=dev). A test server reachable from
+  /// outside the office also requires [accessCode].
+  Future<String> devToken(String subject, String name, List<Map<String, String>> grants, {String accessCode = ''}) async {
+    final d = await request('POST', '/dev/token', body: {
+      'subject': subject,
+      'name': name,
+      'grants': grants,
+      if (accessCode.isNotEmpty) 'access_code': accessCode,
+    }) as Map<String, dynamic>;
     return d['access_token'] as String;
   }
 }

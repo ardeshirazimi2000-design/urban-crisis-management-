@@ -69,7 +69,12 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)
 	(&admin.Module{Pool: pool, Guard: guard, Resolver: a.Resolver, ReplayLimiter: httpx.NewRateLimiter(5, 3)}).Routes(router)
 	if cfg.IsLocal() && cfg.AuthMode == "dev" {
-		(&admin.DevTokens{Pool: pool, Secret: []byte(cfg.DevJWTSecret), Audience: cfg.OIDCAudience, Resolver: a.Resolver}).Routes(router)
+		dev := &admin.DevTokens{Pool: pool, Secret: []byte(cfg.DevJWTSecret), Audience: cfg.OIDCAudience, Resolver: a.Resolver,
+			StaffCode: cfg.DevAccessCodeStaff, CitizenCode: cfg.DevAccessCodeCitizen}
+		if dev.StaffCode != "" {
+			dev.Limiter = httpx.NewRateLimiter(10, 10) // per IP: bounds access-code guessing
+		}
+		dev.Routes(router)
 	}
 
 	// Liveness: process is up. Readiness: can serve traffic (DB reachable, not draining).

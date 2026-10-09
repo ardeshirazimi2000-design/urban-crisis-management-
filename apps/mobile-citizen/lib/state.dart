@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/foundation.dart';
 
+/// Citizen access code of a test server reachable from outside the office (--dart-define=ACCESS_CODE=...).
+const devAccessCode = String.fromEnvironment('ACCESS_CODE');
+
 /// Citizen app state: identity, encrypted offline report queue, cached official alerts.
 class CitizenState extends ChangeNotifier {
   final ApiClient api;
@@ -43,7 +46,7 @@ class CitizenState extends ChangeNotifier {
     if (await readToken() != null || !devAuth) return;
     try {
       final id = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
-      await writeToken(await api.devToken('citizen-$id', 'شهروند', const []));
+      await writeToken(await api.devToken('citizen-$id', 'شهروند', const [], accessCode: devAccessCode));
     } on ApiException catch (e) {
       offline = e.isNetwork;
     }

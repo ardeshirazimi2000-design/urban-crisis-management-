@@ -19,9 +19,16 @@ export function LoginPage() {
   const { login } = useSession();
   const { busy, error, run } = useAction();
   const [idx, setIdx] = useState(0);
+  const [code, setCode] = useState("");
   return (
     <div className="login">
-      <div className="card narrow">
+      <form className="card narrow" onSubmit={(e) => {
+        e.preventDefault();
+        void run(async () => {
+          const r = await api<{ access_token: string }>("POST", "/dev/token", { body: { ...PRESETS[idx], access_code: code || undefined } });
+          await login(r.access_token);
+        });
+      }}>
         <h1>کنسول مدیریت بحران شهری</h1>
         <p className="muted">ورود توسعه محلی (فقط APP_ENV=local). در محیط عملیاتی ورود از طریق OIDC و MFA انجام می‌شود.</p>
         <label>
@@ -32,15 +39,15 @@ export function LoginPage() {
             ))}
           </select>
         </label>
-        <button className="btn primary" disabled={busy}
-          onClick={() => run(async () => {
-            const r = await api<{ access_token: string }>("POST", "/dev/token", { body: PRESETS[idx] });
-            await login(r.access_token);
-          })}>
+        <label>
+          کد دسترسی آزمایشی <span className="muted small">(اگر سرور از بیرون شبکه در دسترس است)</span>
+          <input type="password" autoComplete="current-password" dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} />
+        </label>
+        <button type="submit" className="btn primary" disabled={busy}>
           ورود
         </button>
         <ErrorBox error={error} />
-      </div>
+      </form>
     </div>
   );
 }

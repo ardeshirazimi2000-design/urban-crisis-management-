@@ -407,7 +407,27 @@ paths:
       tags: [identity]
       security: []
       summary: LOCAL DEVELOPMENT ONLY (registered only with APP_ENV=local|test and AUTH_MODE=dev)
-      responses: {"200": {description: token}}
+      description: >-
+        When DEV_ACCESS_CODE_STAFF is configured (test server reachable from outside), access_code is required.
+        The staff code may request any role; the citizen code only a "citizen-" subject with no staff roles.
+        Requests are rate limited per client IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: {type: string, pattern: "^[a-z0-9._-]{3,64}$"}
+                name: {type: string}
+                grants: {type: array, items: {type: object, required: [role], properties: {role: {type: string}, org_code: {type: string}}}}
+                access_code: {type: string}
+      responses:
+        "200": {description: token}
+        "401": {description: ACCESS_CODE_INVALID}
+        "403": {description: citizen code used for a staff role or account}
+        "429": {description: RATE_LIMITED}
 
 components:
   securitySchemes:

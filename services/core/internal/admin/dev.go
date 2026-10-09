@@ -1,8 +1,11 @@
 package admin
 
 import (
+	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +25,17 @@ type DevTokens struct {
 	Secret   []byte
 	Audience string
 	Resolver *auth.Resolver
+
+	// Access codes for a test server reachable from outside the office. Empty StaffCode = no code required.
+	StaffCode   string
+	CitizenCode string
+	Limiter     *httpx.RateLimiter // per client IP; bounds access-code guessing
+}
+
+var errAccessCode = httpx.NewError(http.StatusUnauthorized, "ACCESS_CODE_INVALID", "کد دسترسی آزمایشی نادرست است")
+
+func codeEq(a, b string) bool {
+	return b != "" && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 var subjectRe = regexp.MustCompile(`^[a-z0-9._-]{3,64}$`)
@@ -38,12 +52,38 @@ func (d *DevTokens) Routes(r *httpx.Router) {
 func (d *DevTokens) token(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	var req struct {
-		Subject string     `json:"subject"`
-		Name    string     `json:"name"`
-		Grants  []devGrant `json:"grants"`
+		Subject    string     `json:"subject"`
+		Name       string     `json:"name"`
+		Grants     []devGrant `json:"grants"`
+		AccessCode string     `json:"access_code"`
+	}
+	if d.Limiter != nil && !d.Limiter.Allow("dev-token:"+httpx.ClientIP(r)) {
+		return httpx.ErrRateLimited
 	}
 	if err := httpx.DecodeJSON(w, r, &req, 8<<10); err != nil {
 		return err
+	}
+	citizenOnly := false
+	if d.StaffCode != "" {
+		code := strings.TrimSpace(req.AccessCode)
+		switch {
+		case codeEq(code, d.StaffCode):
+		case codeEq(code, d.CitizenCode):
+			citizenOnly = true
+		default:
+			slog.WarnContext(ctx, "dev_token_access_code_rejected", "ip", httpx.ClientIP(r))
+			return errAccessCode
+		}
+	}
+	if citizenOnly {
+		// The citizen code (built into the test APK) may only create citizen accounts, never touch staff ones.
+		ok := strings.HasPrefix(req.Subject, "citizen-")
+		for _, g := range req.Grants {
+			ok = ok && g.Role == string(auth.RoleCitizen)
+		}
+		if !ok {
+			return httpx.ErrForbidden
+		}
 	}
 	var v httpx.Validator
 	v.Check(subjectRe.MatchString(req.Subject), "subject", "invalid")
@@ -59,6 +99,15 @@ func (d *DevTokens) token(w http.ResponseWriter, r *http.Request) error {
 		if err := tx.QueryRow(ctx, `INSERT INTO users (subject_id, display_name) VALUES ($1,$2)
 			ON CONFLICT (subject_id) DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id`, subject, req.Name).Scan(&uid); err != nil {
 			return err
+		}
+		if citizenOnly {
+			var staffRoles int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM user_roles WHERE user_id=$1 AND role_code<>$2`, uid, string(auth.RoleCitizen)).Scan(&staffRoles); err != nil {
+				return err
+			}
+			if staffRoles > 0 {
+				return httpx.ErrForbidden
+			}
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM user_roles WHERE user_id=$1`, uid); err != nil {
 			return err
@@ -78,7 +127,7 @@ func (d *DevTokens) token(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 		return audit.Write(ctx, tx, audit.Entry{ActorID: &uid, Action: "dev.token_issued", TargetType: "user", TargetID: uid.String(),
-			Outcome: "success", Reason: "local development only", Details: map[string]any{"grants": len(req.Grants)},
+			Outcome: "success", Reason: "local development only", Details: map[string]any{"grants": len(req.Grants), "citizen_code": citizenOnly},
 			CorrelationID: httpx.CorrelationID(ctx)})
 	})
 	if err != nil {

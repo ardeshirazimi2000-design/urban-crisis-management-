@@ -5,8 +5,10 @@
 #   sudo bash install-lan.sh
 #
 # Safe to re-run: it updates the code and keeps existing secrets and data.
-# This is a TEST deployment: login uses local development tokens (anyone on the LAN can sign in with any role).
-# Never put real personal data on it and never expose it to the Internet (no port forwarding on the router).
+# This is a TEST deployment: login uses local development tokens protected only by two access codes (printed at
+# the end; staff code = any role, citizen code = built into the test APK). Plain HTTP, no real accounts.
+# Never put real personal data on it. If you forward a public IP to it, forward ONLY the web port and switch the
+# forward off when you are not testing.
 set -Eeuo pipefail
 
 REPO_URL=${REPO_URL:-https://github.com/ardeshirazimi2000-design/urban-crisis-management-.git}
@@ -16,6 +18,10 @@ BACKUP_DIR=${BACKUP_DIR:-/var/backups/urban-crisis}
 WEB_PORT=${WEB_PORT:-80}
 # Area in which reports are accepted: iran (default for test servers), tehran, or "minLat,maxLat,minLng,maxLng".
 SERVICE_AREA=${SERVICE_AREA:-iran}
+# Optional public address forwarded to this server (e.g. 78.39.234.80); only used in the printed instructions.
+PUBLIC_HOST=${PUBLIC_HOST:-}
+# Set ROTATE_ACCESS_CODES=1 to issue new access codes (e.g. after one leaked); a new APK is then needed.
+ROTATE_ACCESS_CODES=${ROTATE_ACCESS_CODES:-0}
 # Candidate mirrors, tried in order; override with space-separated lists.
 REGISTRY_MIRRORS=${REGISTRY_MIRRORS:-"https://docker.arvancloud.ir https://docker.iranserver.com https://registry.docker.ir"}
 NPM_CANDIDATES=${NPM_CANDIDATES:-"https://registry.npmjs.org/ https://registry.npmmirror.com/"}
@@ -143,7 +149,12 @@ secret() { local v; v=$(getenv "$1"); [[ -n "$v" && "$v" != *change-me* && "$v" 
 POSTGRES_PASSWORD=$(secret POSTGRES_PASSWORD 24)
 DEV_JWT_SECRET=$(secret DEV_JWT_SECRET 32)
 MEDIA_URL_SECRET=$(secret MEDIA_URL_SECRET 32)
-PUBLIC_BASE_URL="http://$SERVER_IP"; [[ "$WEB_PORT" != 80 ]] && PUBLIC_BASE_URL="$PUBLIC_BASE_URL:$WEB_PORT"
+code() { local v; v=$(getenv "$1"); [[ -n "$v" && "$ROTATE_ACCESS_CODES" != 1 ]] && echo "$v" || openssl rand -hex 6; }
+DEV_ACCESS_CODE_STAFF=$(code DEV_ACCESS_CODE_STAFF)
+DEV_ACCESS_CODE_CITIZEN=$(code DEV_ACCESS_CODE_CITIZEN)
+[[ "$DEV_ACCESS_CODE_STAFF" != "$DEV_ACCESS_CODE_CITIZEN" ]] || DEV_ACCESS_CODE_CITIZEN=$(openssl rand -hex 6)
+LAN_URL="http://$SERVER_IP"; [[ "$WEB_PORT" != 80 ]] && LAN_URL="$LAN_URL:$WEB_PORT"
+PUBLIC_URL=""; [[ -n "$PUBLIC_HOST" ]] && { PUBLIC_URL="http://$PUBLIC_HOST"; [[ "$WEB_PORT" != 80 ]] && PUBLIC_URL="$PUBLIC_URL:$WEB_PORT"; }
 case "$SERVICE_AREA" in
   iran)   AREA="24.8,39.9,44.0,63.4" ;;
   tehran) AREA="34.8,36.3,50.3,53.2" ;;
@@ -157,9 +168,11 @@ cat > "$ENV_FILE" <<EOF
 APP_ENV=local
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 DEV_JWT_SECRET=$DEV_JWT_SECRET
+DEV_ACCESS_CODE_STAFF=$DEV_ACCESS_CODE_STAFF
+DEV_ACCESS_CODE_CITIZEN=$DEV_ACCESS_CODE_CITIZEN
 MEDIA_URL_SECRET=$MEDIA_URL_SECRET
 WEB_BIND=0.0.0.0:$WEB_PORT
-PUBLIC_BASE_URL=$PUBLIC_BASE_URL
+PUBLIC_BASE_URL=/
 SERVICE_AREA_MIN_LAT=$AREA_MIN_LAT
 SERVICE_AREA_MAX_LAT=$AREA_MAX_LAT
 SERVICE_AREA_MIN_LNG=$AREA_MIN_LNG
@@ -201,7 +214,8 @@ if [[ "$SKIP_FIREWALL" != 1 ]]; then
   ufw allow from "$LAN_CIDR" to any port "$WEB_PORT" proto tcp >/dev/null
   ufw --force enable >/dev/null
   ok "SSH and the console are allowed from $LAN_CIDR only"
-  warn "Ports published by Docker bypass ufw; keep this server off the Internet (no port forwarding)."
+  warn "Ports published by Docker bypass ufw: a router forward to port $WEB_PORT reaches the console from the Internet."
+  warn "Forward only port $WEB_PORT (never SSH/22) and keep the access codes private."
 fi
 
 # ---------------------------------------------------------------------------
@@ -224,12 +238,19 @@ echo "30 2 * * * root /usr/local/sbin/urban-crisis-backup >> /var/log/urban-cris
 /usr/local/sbin/urban-crisis-backup >/dev/null && ok "First backup written to $BACKUP_DIR"
 
 # ---------------------------------------------------------------------------
+PUBLIC_LINE="  Console (from the Internet): not configured (re-run with PUBLIC_HOST=<public IP> to show it)"
+[[ -z "$PUBLIC_URL" ]] || PUBLIC_LINE="  Console (from the Internet): $PUBLIC_URL   (router must forward port $WEB_PORT)"
 cat <<EOF
 
 $(printf '\033[1;32m')Installation complete.$(printf '\033[0m')
 
-  Console (from any office computer):  $PUBLIC_BASE_URL
-  API for the mobile apps:             $PUBLIC_BASE_URL/api/v1
+  Console (office network):   $LAN_URL
+$PUBLIC_LINE
+  API for the mobile apps:    ${PUBLIC_URL:-$LAN_URL}/api/v1
+
+  Access code for staff (console sign-in, any role):  $DEV_ACCESS_CODE_STAFF
+  Access code for citizens (build into the test APK): $DEV_ACCESS_CODE_CITIZEN
+  (Shown again with: sudo grep ACCESS_CODE $ENV_FILE ; new codes: sudo ROTATE_ACCESS_CODES=1 bash deploy/install-lan.sh)
 
   Sign in with a sample role on the login page (operator, commander, resource manager, GIS, security).
   Sample data (organisations, facilities, resources) is fictional.
@@ -241,5 +262,6 @@ $(printf '\033[1;32m')Installation complete.$(printf '\033[0m')
     sudo bash deploy/install-lan.sh        # update to the latest code (keeps data)
     sudo urban-crisis-backup               # manual backup
 
-  TEST deployment only: development sign-in, no real personal data, no Internet exposure.
+  TEST deployment only: development sign-in, plain HTTP, no real personal data.
+  Switch the router forward off when you are not testing.
 EOF
