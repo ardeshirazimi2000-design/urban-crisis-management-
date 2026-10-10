@@ -1,6 +1,7 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'platform.dart';
 import 'state.dart';
@@ -326,6 +327,27 @@ class _SheltersScreenState extends State<SheltersScreen> {
     if (mounted) setState(() => _locating = false);
   }
 
+  /// Opens the phone's map app (Google Maps, Neshan, Balad, …) at the shelter via a geo: link; falls back to
+  /// OpenStreetMap in the browser, then to copying the coordinates.
+  Future<void> _navigate(BuildContext context, PublicShelter sh) async {
+    final lat = sh.lat.toStringAsFixed(6), lng = sh.lng.toStringAsFixed(6);
+    final geo = Uri.parse('geo:$lat,$lng?q=$lat,$lng(${Uri.encodeComponent(sh.name)})');
+    final web = Uri.parse('https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng');
+    for (final uri in [geo, web]) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } catch (_) {
+        // no app for this link; try the next one
+      }
+    }
+    if (context.mounted) await _copy(context, sh, 'برنامه نقشه پیدا نشد؛ مختصات کپی شد.');
+  }
+
+  Future<void> _copy(BuildContext context, PublicShelter sh, String message) async {
+    await Clipboard.setData(ClipboardData(text: '${sh.lat.toStringAsFixed(6)},${sh.lng.toStringAsFixed(6)}'));
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   String _distance(double m) => m < 1000 ? '${faDigits(m.round())} متر' : '${faDigits((m / 1000).toStringAsFixed(1))} کیلومتر';
 
   @override
@@ -355,23 +377,32 @@ class _SheltersScreenState extends State<SheltersScreen> {
                       subtitle: Text('با ۱۱۲ تماس بگیرید.'))),
                 for (final sh in s.shelters)
                   Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.night_shelter, color: Color(0xFF15803D)),
-                      title: Text(sh.name),
-                      subtitle: Text('${sh.organization}\nفاصله: ${_distance(sh.distanceM)} · جای خالی: ${faDigits(sh.available)} نفر'
-                          '${sh.updatedAt == null ? '' : '\nآمار: ${agoFa(sh.updatedAt!)}'}'),
-                      isThreeLine: true,
-                      trailing: IconButton(
-                        tooltip: 'کپی مختصات برای مسیریابی',
-                        icon: const Icon(Icons.copy),
-                        onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: '${sh.lat.toStringAsFixed(6)},${sh.lng.toStringAsFixed(6)}'));
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('مختصات کپی شد؛ در برنامه نقشه جست‌وجو کنید.')));
-                          }
-                        },
-                      ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.night_shelter, color: Color(0xFF15803D)),
+                          title: Text(sh.name),
+                          subtitle: Text('${sh.organization}\nفاصله: ${_distance(sh.distanceM)} · جای خالی: ${faDigits(sh.available)} نفر'
+                              '${sh.updatedAt == null ? '' : '\nآمار: ${agoFa(sh.updatedAt!)}'}'),
+                          isThreeLine: true,
+                        ),
+                        Row(children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              icon: const Icon(Icons.directions),
+                              label: const Text('مسیریابی'),
+                              onPressed: () => _navigate(context, sh),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'کپی مختصات',
+                            icon: const Icon(Icons.copy),
+                            onPressed: () => _copy(context, sh, 'مختصات کپی شد؛ در برنامه نقشه جست‌وجو کنید.'),
+                          ),
+                        ]),
+                      ]),
                     ),
                   ),
               ]),

@@ -16,6 +16,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   path_provider: ^2.1.4
   geolocator: ^13.0.1
+  url_launcher: ^6.3.0
 
 # geolocator_android 4.6.2 uses build properties that need a newer Flutter than 3.24 despite its constraints.
 dependency_overrides:
