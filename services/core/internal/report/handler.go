@@ -291,7 +291,8 @@ func (m *Module) listMine(w http.ResponseWriter, r *http.Request) error {
 func (m *Module) listWhere(w http.ResponseWriter, r *http.Request, reporter *uuid.UUID) error {
 	ctx := r.Context()
 	q := r.URL.Query()
-	status, err := httpx.OneOf(r, "status", Statuses...)
+	// "open" = everything still awaiting a decision (AI enrichment moves received -> triage within seconds).
+	status, err := httpx.OneOf(r, "status", append([]string{"open"}, Statuses...)...)
 	if err != nil {
 		return err
 	}
@@ -331,7 +332,7 @@ func (m *Module) listWhere(w http.ResponseWriter, r *http.Request, reporter *uui
 		curT, curID = &cur.T, &cur.ID
 	}
 	rows, err := m.Pool.Query(ctx, `SELECT `+selectCols+` FROM reports r
-		WHERE ($1 = '' OR r.status = $1) AND ($2 = '' OR r.type = $2)
+		WHERE ($1 = '' OR r.status = $1 OR ($1 = 'open' AND r.status IN ('received','triage','under_review'))) AND ($2 = '' OR r.type = $2)
 		  AND ($3::timestamptz IS NULL OR r.received_at >= $3)
 		  AND ($4::uuid IS NULL OR r.reporter_ref = $4)
 		  AND ($5::float8 IS NULL OR ST_DWithin(r.location, ST_SetSRID(ST_MakePoint($6, $5), 4326)::geography, $7))

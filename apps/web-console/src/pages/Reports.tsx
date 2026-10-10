@@ -7,10 +7,10 @@ import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, us
 import { MapView } from "../components/MapView";
 import { PhoneReportForm } from "./PhoneReport";
 
-const QUEUE_STATUSES = ["", "received", "triage", "under_review", "accepted", "rejected", "duplicate", "linked_to_incident"];
+const QUEUE_STATUSES = ["open", "", "received", "triage", "under_review", "accepted", "rejected", "duplicate", "linked_to_incident"];
 
 export function ReportsPage() {
-  const [status, setStatus] = useState("received");
+  const [status, setStatus] = useState("open");
   const [type, setType] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [intake, setIntake] = useState(false);
@@ -26,7 +26,7 @@ export function ReportsPage() {
         <div className="row gap wrap filters">
           <label>وضعیت
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              {QUEUE_STATUSES.map((s) => <option key={s} value={s}>{s ? t(s) : "همه"}</option>)}
+              {QUEUE_STATUSES.map((s) => <option key={s} value={s}>{s === "open" ? "در انتظار بررسی" : s ? t(s) : "همه"}</option>)}
             </select>
           </label>
           <label>نوع

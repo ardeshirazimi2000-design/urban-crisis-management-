@@ -54,7 +54,10 @@ paths:
       summary: Operator queue (keyset pagination by received_at)
       x-permission: report:read
       parameters:
-        - {name: status, in: query, schema: {$ref: "#/components/schemas/ReportStatus"}}
+        - name: status
+          in: query
+          description: A report status, or "open" for received + triage + under_review (the operator queue).
+          schema: {oneOf: [{$ref: "#/components/schemas/ReportStatus"}, {type: string, enum: [open]}]}
         - {name: type, in: query, schema: {$ref: "#/components/schemas/ReportType"}}
         - {name: since, in: query, schema: {type: string, format: date-time}}
         - {name: near_lat, in: query, schema: {type: number}}

@@ -82,3 +82,33 @@ func TestPhoneIntake(t *testing.T) {
 		t.Fatalf("want 422 with caller_phone and media_ids details, got %d %s", res.Status, res.Body)
 	}
 }
+
+// The operator queue's default "open" filter keeps reports visible after AI triage moves them on.
+func TestReportQueueOpenFilter(t *testing.T) {
+	op := login(t, grant{Role: "OPERATOR", OrgCode: "command"})
+	var created struct {
+		ReportID uuid.UUID `json:"report_id"`
+	}
+	op.do("POST", "/reports/phone", phoneBody(), idem(), &created, 202)
+	if _, err := pool.Exec(context.Background(), `UPDATE reports SET status='triage' WHERE id=$1`, created.ReportID); err != nil {
+		t.Fatal(err)
+	}
+	has := func(status string) bool {
+		var page struct {
+			Items []struct {
+				ID uuid.UUID `json:"id"`
+			} `json:"items"`
+		}
+		op.do("GET", "/reports?limit=200&status="+status, nil, nil, &page, 200)
+		for _, it := range page.Items {
+			if it.ID == created.ReportID {
+				return true
+			}
+		}
+		return false
+	}
+	if has("received") || !has("open") || !has("triage") {
+		t.Fatalf("open filter: received=%v open=%v triage=%v", has("received"), has("open"), has("triage"))
+	}
+	op.do("GET", "/reports?status=bogus", nil, nil, nil, 422)
+}
