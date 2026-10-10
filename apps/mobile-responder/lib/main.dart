@@ -15,6 +15,8 @@ Future<void> main() async {
     cache: await openStore('assignment_cache'),
     readToken: SecureTokens.read,
     writeToken: SecureTokens.write,
+    readPref: SecureTokens.readPref,
+    writePref: SecureTokens.writePref,
   );
   runApp(ResponderApp(state: state));
   await state.start();

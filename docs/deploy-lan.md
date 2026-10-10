@@ -45,6 +45,7 @@ sudo bash install-lan.sh
    ALLOW_CLEARTEXT=true flutter build apk --release \
      --dart-define=API_BASE_URL=http://<IP عمومی>/api/v1 --dart-define=DEV_AUTH=true
    ```
+   اپ امدادگر هم به همین شکل ساخته می‌شود (`apps/mobile-responder`)؛ کد **کارکنان** را در صفحه ورود آن وارد کنید.
 4. وقتی آزمایش نمی‌کنید فوروارد را خاموش کنید. ترافیک رمزنگاری نشده (HTTP) است؛ داده واقعی وارد نکنید.
 
 پورت‌هایی که Docker منتشر می‌کند از ufw عبور می‌کنند؛ بنابراین محافظ اصلی همین کدهای دسترسی است.

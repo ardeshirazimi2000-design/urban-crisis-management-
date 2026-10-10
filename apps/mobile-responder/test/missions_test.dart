@@ -77,4 +77,50 @@ void main() {
     expect(find.text('در مسیر'), findsOneWidget);
     expect(find.text('دریافت شد'), findsOneWidget);
   });
+
+  test('expired session renews itself with the saved sign-in; queued status change is not lost', () async {
+    String? token;
+    final prefs = <String, String?>{};
+    final codes = <String?>[];
+    var st = 'assigned', ver = 1;
+    final client = MockClient((req) async {
+      if (req.url.path.endsWith('/dev/token')) {
+        final b = jsonDecode(req.body) as Map<String, dynamic>;
+        codes.add(b['access_code'] as String?);
+        if (b['access_code'] != 'staff-code') {
+          return http.Response(jsonEncode({'error': {'code': 'ACCESS_CODE_INVALID', 'message': 'bad'}}), 401, headers: _utf8);
+        }
+        return http.Response(jsonEncode({'access_token': 'tok-${codes.length}'}), 200, headers: _utf8);
+      }
+      if (req.headers['Authorization'] != 'Bearer $token' || token == 'tok-1') {
+        return http.Response(jsonEncode({'error': {'code': 'UNAUTHENTICATED', 'message': 'expired'}}), 401, headers: _utf8);
+      }
+      if (req.url.path.endsWith('/assignments/mine')) {
+        return http.Response(jsonEncode({'items': [assignment(st, ver)]}), 200, headers: _utf8);
+      }
+      final b = jsonDecode(req.body) as Map<String, dynamic>;
+      st = b['status'] as String;
+      ver++;
+      return http.Response(jsonEncode(assignment(st, ver)), 200, headers: _utf8);
+    });
+    final api = ApiClient(Uri.parse('http://x/api/v1'), () async => token, client: client);
+    final key = StaticKeyProvider(List.filled(32, 3));
+    final s = ResponderState(api: api, queueStore: EncryptedJsonStore(MemoryByteStore(), key),
+        cache: EncryptedJsonStore(MemoryByteStore(), key), readToken: () async => token, writeToken: (t) async => token = t,
+        readPref: (k) async => prefs[k], writePref: (k, v) async => prefs[k] = v);
+    await s.queue.load();
+
+    await expectLater(s.devSignIn('responder1', 'امدادگر', accessCode: 'wrong'), throwsA(isA<ApiException>()));
+    expect(s.signedIn, isFalse);
+    await s.devSignIn('responder1', 'امدادگر', accessCode: 'staff-code');
+    expect(s.signedIn, isTrue);
+    expect(s.assignments.single.status, 'assigned');
+
+    token = 'tok-1'; // session expired
+    await s.setStatus(s.assignments.single, 'en_route');
+    expect(s.signedIn, isTrue);
+    expect(st, 'en_route');
+    expect(s.queue.pending, isEmpty);
+    expect(codes.last, 'staff-code');
+  });
 }

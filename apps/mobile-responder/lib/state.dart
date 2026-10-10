@@ -12,6 +12,11 @@ class ResponderState extends ChangeNotifier {
   final EncryptedJsonStore cache;
   final Future<String?> Function() readToken;
   final Future<void> Function(String?) writeToken;
+
+  /// Small private values in the OS keystore: the test sign-in (id, name, access code), so an expired
+  /// session renews itself instead of stopping mission updates in the field.
+  final Future<String?> Function(String key) readPref;
+  final Future<void> Function(String key, String? value) writePref;
   late final OfflineQueue queue;
 
   List<Assignment> _server = [];
@@ -21,9 +26,15 @@ class ResponderState extends ChangeNotifier {
   Timer? _timer;
 
   ResponderState({required this.api, required EncryptedJsonStore queueStore, required this.cache,
-      required this.readToken, required this.writeToken}) {
+      required this.readToken, required this.writeToken, Future<String?> Function(String)? readPref,
+      Future<void> Function(String, String?)? writePref})
+      : readPref = readPref ?? _noPref,
+        writePref = writePref ?? _noWrite {
     queue = OfflineQueue(queueStore, api, resolveConflict: _alreadyApplied);
   }
+
+  static Future<String?> _noPref(String _) async => null;
+  static Future<void> _noWrite(String _, String? __) async {}
 
   Future<void> start() async {
     await queue.load();
@@ -40,31 +51,61 @@ class ResponderState extends ChangeNotifier {
   }
 
   /// Local development sign-in. Production uses OIDC with MFA for responders.
-  Future<void> devSignIn(String subject, String name) async {
-    await writeToken(await api.devToken(subject, name, const [{'role': 'RESPONDER'}]));
+  Future<void> devSignIn(String subject, String name, {String accessCode = ''}) async {
+    await writeToken(await api.devToken(subject, name, const [{'role': 'RESPONDER'}], accessCode: accessCode));
+    await writePref('subject', subject);
+    await writePref('name', name);
+    await writePref('access_code', accessCode);
     signedIn = true;
     await sync();
   }
 
+  /// Saved sign-in for the form (pre-filled after sign-out).
+  Future<(String?, String?, String?)> savedSignIn() async =>
+      (await readPref('subject'), await readPref('name'), await readPref('access_code'));
+
+  Future<bool> _reauthenticate() async {
+    final subject = await readPref('subject');
+    if (subject == null) return false;
+    try {
+      await writeToken(await api.devToken(subject, await readPref('name') ?? subject, const [{'role': 'RESPONDER'}],
+          accessCode: await readPref('access_code') ?? ''));
+      return true;
+    } on ApiException {
+      return false;
+    }
+  }
+
   Future<void> signOut() async {
     await writeToken(null);
+    await writePref('access_code', null);
     signedIn = false;
     notifyListeners();
   }
 
   Future<void> sync() async {
-    final r = await queue.flush();
+    var r = await queue.flush();
+    if (r.needsAuth && await _reauthenticate()) r = await queue.flush();
     offline = r.stoppedOffline;
     try {
-      _server = await api.myAssignments();
+      _server = await _fetchAssignments();
       fetchedAt = DateTime.now();
       await cache.write({'items': _server.map((a) => a.toJson()).toList(), 'fetched_at': fetchedAt!.toIso8601String()});
       offline = false;
     } on ApiException catch (e) {
       offline = e.isNetwork;
-      if (e.status == 401) signedIn = false;
+      if (e.isUnauthenticated) signedIn = false;
     }
     notifyListeners();
+  }
+
+  Future<List<Assignment>> _fetchAssignments() async {
+    try {
+      return await api.myAssignments();
+    } on ApiException catch (e) {
+      if (e.isUnauthenticated && await _reauthenticate()) return api.myAssignments();
+      rethrow;
+    }
   }
 
   /// Missions as the responder sees them: server state with not-yet-synced local status changes applied.

@@ -14,7 +14,27 @@ class SignInScreen extends StatefulWidget {
 class _SignInScreenState extends State<SignInScreen> {
   final _id = TextEditingController(text: 'responder1');
   final _name = TextEditingController(text: 'امدادگر ۱');
+  final _code = TextEditingController();
   String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.savedSignIn().then((s) {
+      if (!mounted) return;
+      if (s.$1 != null) _id.text = s.$1!.replaceFirst('dev:', '');
+      if (s.$2 != null) _name.text = s.$2!;
+    });
+  }
+
+  @override
+  void dispose() {
+    _id.dispose();
+    _name.dispose();
+    _code.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -23,16 +43,28 @@ class _SignInScreenState extends State<SignInScreen> {
           const Text('ورود توسعه محلی. در محیط عملیاتی ورود از طریق OIDC و احراز هویت چندعاملی است.'),
           TextField(controller: _id, decoration: const InputDecoration(labelText: 'شناسه'), textDirection: TextDirection.ltr),
           TextField(controller: _name, decoration: const InputDecoration(labelText: 'نام نمایشی')),
+          TextField(
+            controller: _code,
+            decoration: const InputDecoration(labelText: 'کد دسترسی کارکنان', helperText: 'از مدیر سامانه بگیرید'),
+            textDirection: TextDirection.ltr,
+            autocorrect: false,
+            enableSuggestions: false,
+          ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: () async {
-              try {
-                await widget.state.devSignIn(_id.text.trim(), _name.text.trim());
-              } on ApiException catch (e) {
-                setState(() => _error = e.message);
-              }
-            },
-            child: const Text('ورود'),
+            onPressed: _busy
+                ? null
+                : () async {
+                    setState(() => _busy = true);
+                    try {
+                      await widget.state.devSignIn(_id.text.trim().toLowerCase(), _name.text.trim(), accessCode: _code.text.trim());
+                      _error = null;
+                    } on ApiException catch (e) {
+                      _error = e.isNetwork ? 'ارتباط با سرور برقرار نیست.' : e.message;
+                    }
+                    if (mounted) setState(() => _busy = false);
+                  },
+            child: Text(_busy ? 'در حال ورود…' : 'ورود'),
           ),
           if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
         ]),
