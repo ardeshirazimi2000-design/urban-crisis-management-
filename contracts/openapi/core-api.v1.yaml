@@ -19,6 +19,7 @@ tags:
   - {name: media}
   - {name: incidents}
   - {name: resources}
+  - {name: relief}
   - {name: alerts}
   - {name: gis}
   - {name: identity}
@@ -213,6 +214,78 @@ paths:
       parameters: [{$ref: "#/components/parameters/Id"}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/AssignRequest"}}}}
       responses: {"201": {description: assigned}, "409": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/incidents/{id}/needs:
+    post:
+      tags: [relief]
+      summary: Register an open need (teams, vehicles, supplies, shelter places) for an open/active incident
+      x-permission: need:create (incident owner org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/NeedRequest"}}}}
+      responses: {"201": {description: created, content: {application/json: {schema: {$ref: "#/components/schemas/Need"}}}}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/needs:
+    get:
+      tags: [relief]
+      summary: Needs in the caller's org scope; status=active means open + partially_met (most urgent first)
+      x-permission: need:read
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [active, open, partially_met, met, cancelled]}}
+        - {name: category, in: query, schema: {$ref: "#/components/schemas/NeedCategory"}}
+        - {name: incident_id, in: query, schema: {type: string, format: uuid}}
+        - {$ref: "#/components/parameters/Limit"}
+      responses: {"200": {description: needs, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Need"}}}}}}}}
+  /api/v1/needs/{id}:
+    get:
+      tags: [relief]
+      summary: A need with its append-only supply history
+      x-permission: need:read (incident owner org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: need}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/needs/{id}/fulfillments:
+    post:
+      tags: [relief]
+      summary: Record supply against a need; version-checked so a retry cannot count twice; 422 exceeds_remaining
+      x-permission: need:fulfill (incident owner org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/FulfillRequest"}}}}
+      responses: {"200": {description: updated need}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/needs/{id}/cancel:
+    post:
+      tags: [relief]
+      summary: Cancel an open need (reason required)
+      x-permission: need:create (incident owner org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason, version], properties: {reason: {type: string}, version: {type: integer}}}}}}
+      responses: {"200": {description: cancelled need}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/shelters:
+    get:
+      tags: [relief]
+      summary: Shelters with capacity, occupancy and free places, plus totals
+      x-permission: shelter:read
+      responses: {"200": {description: shelters, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Shelter"}}, summary: {type: object}}}}}}}
+  /api/v1/shelters/{id}:
+    get:
+      tags: [relief]
+      summary: A shelter with its append-only occupancy log
+      x-permission: shelter:read (shelter org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: shelter}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/shelters/{id}/occupancy:
+    post:
+      tags: [relief]
+      summary: Record admissions/departures; 409 SHELTER_CAPACITY_EXCEEDED or SHELTER_NOT_ACCEPTING; version 0 for a never-updated shelter
+      x-permission: shelter:update (shelter org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/MovementRequest"}}}}
+      responses: {"200": {description: updated shelter}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/shelters/{id}/settings:
+    post:
+      tags: [relief]
+      summary: Change capacity and/or open/close for admissions (reason required); 409 CAPACITY_BELOW_OCCUPANCY
+      x-permission: resource:manage (shelter org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/SettingsRequest"}}}}
+      responses: {"200": {description: updated shelter}, "409": {$ref: "#/components/responses/Error"}}
 
   /api/v1/resources:
     post:
@@ -543,6 +616,68 @@ components:
       type: object
       required: [report_id, reason]
       properties: {report_id: {type: string, format: uuid}, relation_type: {enum: [evidence, origin, related]}, reason: {type: string}}
+    NeedCategory: {type: string, enum: [rescue_team, ambulance, fire_truck, medical_team, heavy_equipment, shelter_space, water, food, blanket, tent, medicine, other]}
+    NeedRequest:
+      type: object
+      required: [category, quantity, unit, priority]
+      properties:
+        category: {$ref: "#/components/schemas/NeedCategory"}
+        description: {type: string, maxLength: 1000, description: required when category is other}
+        quantity: {type: integer, minimum: 1, maximum: 1000000}
+        unit: {type: string, maxLength: 30}
+        priority: {type: string, enum: [low, medium, high, critical]}
+        location: {$ref: "#/components/schemas/Point"}
+    Need:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        incident_id: {type: string, format: uuid}
+        incident_code: {type: string}
+        category: {$ref: "#/components/schemas/NeedCategory"}
+        quantity: {type: integer}
+        fulfilled: {type: integer}
+        remaining: {type: integer}
+        unit: {type: string}
+        priority: {type: string}
+        status: {type: string, enum: [open, partially_met, met, cancelled]}
+        version: {type: integer}
+    FulfillRequest:
+      type: object
+      required: [quantity, source, version]
+      properties:
+        quantity: {type: integer, minimum: 1}
+        source: {type: string, maxLength: 200, description: "who supplied it (organisation, depot, unit)"}
+        resource_id: {type: string, format: uuid}
+        note: {type: string, maxLength: 1000}
+        version: {type: integer}
+    Shelter:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        capacity: {type: [integer, "null"]}
+        occupancy: {type: integer}
+        available: {type: [integer, "null"]}
+        accepting: {type: boolean}
+        open: {type: boolean, description: "accepting, in service and not full"}
+        full: {type: boolean}
+        version: {type: integer}
+    MovementRequest:
+      type: object
+      required: [version]
+      properties:
+        admitted: {type: integer, minimum: 0, maximum: 10000}
+        discharged: {type: integer, minimum: 0, maximum: 10000}
+        note: {type: string, maxLength: 500}
+        version: {type: integer, minimum: 0}
+    SettingsRequest:
+      type: object
+      required: [reason, version]
+      properties:
+        capacity: {type: integer, minimum: 0, maximum: 100000}
+        accepting: {type: boolean}
+        reason: {type: string}
+        version: {type: integer, minimum: 0}
     AssignRequest:
       type: object
       required: [resource_id, reason]

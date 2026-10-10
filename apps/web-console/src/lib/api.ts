@@ -148,3 +148,24 @@ export type FeatureCollection = {
   type: "FeatureCollection"; features: Feature[];
   meta: { generated_at: string; layers: Record<string, { count: number; stale_count: number; note?: string }>; stale_after_seconds: number };
 };
+
+export type Need = {
+  id: string; incident_id: string; incident_code: string; incident_title: string; owner_org_id: string;
+  category: string; description: string; quantity: number; fulfilled: number; remaining: number; unit: string;
+  priority: string; status: string; location: { lat: number; lng: number } | null; requested_by: string;
+  requested_by_name: string; cancel_reason: string | null; created_at: string; updated_at: string; closed_at: string | null;
+  version: number;
+};
+export type Fulfillment = {
+  id: string; quantity: number; source: string; resource_id: string | null; resource_name: string | null; note: string;
+  actor_id: string; actor_name: string; created_at: string;
+};
+export type Shelter = {
+  id: string; organization_id: string; name: string; resource_status: string; location: { lat: number; lng: number } | null;
+  capacity: number | null; occupancy: number; available: number | null; accepting: boolean; open: boolean; full: boolean;
+  updated_at: string | null; version: number;
+};
+export type ShelterLog = {
+  kind: string; admitted: number; discharged: number; occupancy_after: number; capacity_after: number | null;
+  accepting_after: boolean; note: string; actor_name: string; created_at: string;
+};

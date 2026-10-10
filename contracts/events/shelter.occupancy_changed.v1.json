@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shelter.occupancy_changed.v1.json",
+  "title": "shelter.occupancy_changed v1",
+  "description": "Admissions/departures or capacity/accepting change at a shelter (counts only, no personal data).",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "shelter.occupancy_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "shelter_id",
+        "kind",
+        "occupancy",
+        "accepting"
+      ],
+      "properties": {
+        "shelter_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "movement",
+            "settings"
+          ]
+        },
+        "admitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "discharged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occupancy": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capacity": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "accepting": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

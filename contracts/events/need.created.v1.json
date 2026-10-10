@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "need.created.v1.json",
+  "title": "need.created v1",
+  "description": "An open need was registered for an incident.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "need.created"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "need_id",
+        "incident_id",
+        "category",
+        "quantity",
+        "unit",
+        "priority"
+      ],
+      "properties": {
+        "need_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "rescue_team",
+            "ambulance",
+            "fire_truck",
+            "medical_team",
+            "heavy_equipment",
+            "shelter_space",
+            "water",
+            "food",
+            "blanket",
+            "tent",
+            "medicine",
+            "other"
+          ]
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unit": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      }
+    }
+  }
+}

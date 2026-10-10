@@ -56,6 +56,9 @@ export const L: Record<string, string> = {
   // layers
   reports: "گزارش‌ها", incidents: "حوادث", resources: "منابع", impact_areas: "محدوده اثر (برآورد)", hospital: "بیمارستان",
   fire_station: "ایستگاه آتش‌نشانی", road_closure: "انسداد مسیر", hazard: "خطر", assembly_point: "نقطه تجمع",
+  // needs
+  heavy_equipment: "ماشین‌آلات سنگین", shelter_space: "جای اسکان", water: "آب آشامیدنی", food: "غذا", blanket: "پتو",
+  tent: "چادر", medicine: "دارو", partially_met: "تأمین ناقص", met: "تأمین‌شده",
   // roles
   CITIZEN: "شهروند", RESPONDER: "امدادگر", OPERATOR: "اپراتور", COMMANDER: "فرمانده", RESOURCE_MANAGER: "مدیر منابع",
   GIS_ANALYST: "کارشناس GIS", SECURITY_ADMIN: "مدیر امنیت",
@@ -70,6 +73,13 @@ export const tAttempt = (k: string) => ATTEMPT[k] ?? t(k);
 export const REPORT_TYPES = ["structural_damage", "building_collapse", "trapped_people", "injury", "fire", "gas_leak",
   "road_blocked", "flooding", "power_outage", "water_outage", "landslide", "hazmat", "other"];
 export const SEVERITIES = ["low", "medium", "high", "critical"];
+export const NEED_CATEGORIES = ["rescue_team", "ambulance", "fire_truck", "medical_team", "heavy_equipment", "shelter_space",
+  "water", "food", "blanket", "tent", "medicine", "other"];
+/** Suggested unit per need category (editable in the form). */
+export const NEED_UNITS: Record<string, string> = {
+  rescue_team: "تیم", ambulance: "دستگاه", fire_truck: "دستگاه", medical_team: "تیم", heavy_equipment: "دستگاه",
+  shelter_space: "نفر", water: "لیتر", food: "بسته", blanket: "عدد", tent: "عدد", medicine: "بسته", other: "واحد",
+};
 export const RESOURCE_TYPES = ["ambulance", "fire_truck", "rescue_team", "police_unit", "shelter", "equipment", "medical_team"];
 
 /** Approximates a circle as a closed GeoJSON polygon (used for alert target regions). */

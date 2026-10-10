@@ -12,7 +12,7 @@
 
 | مسیر | فناوری | نقش |
 |---|---|---|
-| [`services/core`](services/core) | Go 1.24، PostgreSQL 16 + PostGIS، Kafka | API ماژولار (گزارش، رسانه، حادثه، منابع، هشدار، GIS، هویت/ممیزی) + کارگرهای `relay`، `notifier`، `consumer` |
+| [`services/core`](services/core) | Go 1.24، PostgreSQL 16 + PostGIS، Kafka | API ماژولار (گزارش، رسانه، حادثه، منابع، نیازهای باز و اسکان، هشدار، GIS، هویت/ممیزی) + کارگرهای `relay`، `notifier`، `consumer` |
 | [`services/ai-assist`](services/ai-assist) | Python، FastAPI، aiokafka | طبقه‌بندی/فوریت کمکی فارسی — غیرمرجع (ADR-004) |
 | [`apps/web-console`](apps/web-console) | React + TypeScript، Leaflet | کنسول فارسی/RTL برای اپراتور، فرمانده، مدیر منابع، GIS و امنیت |
 | [`apps/mobile-citizen`](apps/mobile-citizen) | Flutter | ثبت گزارش آفلاین، هشدارهای رسمی محدوده |

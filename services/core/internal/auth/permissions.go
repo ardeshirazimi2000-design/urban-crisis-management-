@@ -30,6 +30,11 @@ const (
 	ResourceManage     Permission = "resource:manage"
 	ResourceAllocate   Permission = "resource:allocate"
 	AssignmentUpdate   Permission = "assignment:update_assigned"
+	NeedRead           Permission = "need:read"
+	NeedCreate         Permission = "need:create" // register (and cancel, with reason) an open need for an incident
+	NeedFulfill        Permission = "need:fulfill"
+	ShelterRead        Permission = "shelter:read"
+	ShelterUpdate      Permission = "shelter:update" // record admissions/discharges; capacity and closing need resource:manage
 	AlertReadPublic    Permission = "alert:read_public"
 	AlertDraft         Permission = "alert:draft"
 	AlertApprove       Permission = "alert:approve"
@@ -59,13 +64,15 @@ var RolePermissions = map[Role][]Permission{
 	RoleCitizen:   {ReportCreate, ReportReadOwn, AlertReadPublic},
 	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead},
 	RoleOperator: {ReportIntake, ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
-		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic},
+		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic,
+		NeedRead, NeedCreate, ShelterRead, ShelterUpdate},
 	RoleCommander: {ReportIntake, ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
 		IncidentApprove, IncidentLinkReport, GISRead, ResourceRead, ResourceAllocate, AlertDraft, AlertApprove,
-		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic},
-	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic},
-	RoleGISAnalyst:      {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic},
-	RoleSecurityAdmin:   {UserManage, RoleManage, AuditRead, EventReplay},
+		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic, NeedRead, NeedCreate, NeedFulfill, ShelterRead},
+	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic,
+		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate},
+	RoleGISAnalyst:    {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic, NeedRead, ShelterRead},
+	RoleSecurityAdmin: {UserManage, RoleManage, AuditRead, EventReplay},
 }
 
 func IsKnownRole(r string) bool {

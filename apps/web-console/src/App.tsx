@@ -9,6 +9,8 @@ import { IncidentsPage, IncidentDetailPage } from "./pages/Incidents";
 import { ResourcesPage } from "./pages/Resources";
 import { AlertsPage, AlertDetailPage, NewAlertPage } from "./pages/Alerts";
 import { AdminPage } from "./pages/Admin";
+import { NeedsPage } from "./pages/Needs";
+import { SheltersPage } from "./pages/Shelters";
 
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -31,6 +33,8 @@ export function App() {
     { to: "/reports", label: "صف گزارش‌ها", show: can("report:read") },
     { to: "/incidents", label: "حوادث", show: can("incident:read") },
     { to: "/resources", label: "منابع", show: can("resource:read") },
+    { to: "/needs", label: "نیازهای باز", show: can("need:read") },
+    { to: "/shelters", label: "اسکان اضطراری", show: can("shelter:read") },
     { to: "/alerts", label: "هشدارها", show: can("alert:draft") || can("alert:approve") || can("alert:read_delivery") },
     { to: "/admin", label: "هویت و ممیزی", show: can("user:manage") || can("audit:read") },
   ].filter((n) => n.show);
@@ -57,6 +61,8 @@ export function App() {
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/needs" element={<NeedsPage />} />
+          <Route path="/shelters" element={<SheltersPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/alerts/new" element={<NewAlertPage />} />
           <Route path="/alerts/:id" element={<AlertDetailPage />} />

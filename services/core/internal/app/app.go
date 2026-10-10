@@ -21,6 +21,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/httpx"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/relief"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/report"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/resource"
 )
@@ -64,6 +65,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 		AllowUnscanned: cfg.MediaAllowUnscanned, Limiter: reportLimiter}).Routes(router)
 	(&incident.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&resource.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.ResourceStaleAfter}).Routes(router)
+	(&relief.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&alert.Module{Pool: pool, Guard: guard, RequireDistinctApprover: cfg.AlertRequireDistinctApprover,
 		MaxValidity: cfg.AlertMaxValidity}).Routes(router)
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)

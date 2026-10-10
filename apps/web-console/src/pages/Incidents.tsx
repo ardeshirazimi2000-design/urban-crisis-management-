@@ -4,6 +4,7 @@ import { api, newKey, type Incident, type IncidentDetail, type Report, type Reso
 import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
+import { IncidentNeeds } from "./Needs";
 
 const STATUSES = ["", "draft", "open", "active", "escalated", "contained", "resolved", "closed"];
 const LEVELS = ["L0", "L1", "L2", "L3", "L4"];
@@ -189,6 +190,8 @@ export function IncidentDetailPage() {
           {can("alert:draft") && <Link className="btn small" to={`/alerts/new?incident=${id}`}>پیش‌نویس هشدار برای این حادثه</Link>}
         </Section>
       </div>
+
+      <IncidentNeeds incidentId={id} ownerActive={["open", "active", "escalated", "contained"].includes(i.status)} />
 
       <Section title="تاریخچه ممیزی‌پذیر حادثه">
         <ul className="timeline">
