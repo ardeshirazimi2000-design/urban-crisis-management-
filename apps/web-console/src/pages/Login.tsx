@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ErrorBox, useAction } from "../components/ui";
 
@@ -25,6 +25,7 @@ export function LoginPage() {
       <form className="card narrow" onSubmit={(e) => {
         e.preventDefault();
         void run(async () => {
+          if (!code.trim()) throw new ApiError(0, "ACCESS_CODE_REQUIRED", "کد دسترسی کارکنان را وارد کنید.", "");
           const r = await api<{ access_token: string }>("POST", "/dev/token", { body: { ...PRESETS[idx], access_code: code || undefined } });
           await login(r.access_token);
         });
@@ -40,7 +41,7 @@ export function LoginPage() {
           </select>
         </label>
         <label>
-          کد دسترسی آزمایشی <span className="muted small">(اگر سرور از بیرون شبکه در دسترس است)</span>
+          کد دسترسی کارکنان <span className="muted small">(در پایان نصب سرور نمایش داده می‌شود)</span>
           <input type="password" autoComplete="current-password" dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} />
         </label>
         <button type="submit" className="btn primary" disabled={busy}>
