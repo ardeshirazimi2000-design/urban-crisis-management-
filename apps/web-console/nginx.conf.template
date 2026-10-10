@@ -1,0 +1,51 @@
+# Rendered by the nginx image's entrypoint (envsubst of defined variables only; nginx's own $variables are kept).
+proxy_cache_path /var/cache/nginx/tiles levels=1:2 keys_zone=tiles:10m max_size=1g inactive=30d use_temp_path=off;
+
+server {
+  listen 8080;
+  server_tokens off;
+  root /usr/share/nginx/html;
+  # Docker's embedded DNS: the tile upstream is resolved per request, so nginx starts even without Internet.
+  resolver 127.0.0.11 valid=300s ipv6=off;
+  add_header X-Content-Type-Options nosniff always;
+  add_header X-Frame-Options DENY always;
+  add_header Referrer-Policy no-referrer always;
+  add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" always;
+
+  # Same-origin API through the gateway (avoids CORS and token leakage to third parties).
+  location /api/ {
+    proxy_pass http://api:8080;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Correlation-ID $http_x_correlation_id;
+    client_max_body_size 12m;
+  }
+
+  # Base-map tiles, cached on this server (OSM tile policy: identify the app, cache, no bulk download).
+  location ~ "^/tiles/([0-9]|1[0-9])/([0-9]{1,6})/([0-9]{1,6})\.png$" {
+    set $tile_upstream "${TILE_UPSTREAM}";
+    proxy_pass $tile_upstream/$1/$2/$3.png;
+    proxy_ssl_server_name on;
+    proxy_set_header User-Agent "urban-crisis-console/0.1 (test deployment)";
+    proxy_set_header Cookie "";
+    proxy_set_header Referer "";
+    proxy_hide_header Set-Cookie;
+    proxy_ignore_headers Set-Cookie Cache-Control Expires;
+    proxy_cache tiles;
+    proxy_cache_key $1/$2/$3;
+    proxy_cache_valid 200 7d;
+    proxy_cache_valid any 1m;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_lock on;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 15s;
+    expires 1d;
+  }
+
+  location /tiles/ {
+    return 404;
+  }
+
+  location / {
+    try_files $uri /index.html;
+  }
+}

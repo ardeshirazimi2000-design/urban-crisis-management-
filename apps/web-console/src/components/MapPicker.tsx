@@ -1,8 +1,6 @@
 import { Circle, CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import { TILE_ATTR, TILE_URL } from "../lib/tiles";
 import { TEHRAN } from "./MapView";
-
-const TILE_URL = (import.meta.env.VITE_TILE_URL as string | undefined) ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTR = (import.meta.env.VITE_TILE_ATTRIBUTION as string | undefined) ?? "&copy; OpenStreetMap contributors";
 
 export type PickedPoint = { lat: number; lng: number };
 

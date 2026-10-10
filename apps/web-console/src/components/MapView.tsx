@@ -1,11 +1,9 @@
 import { useMemo } from "react";
 import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
 import type { Feature } from "../lib/api";
+import { TILE_ATTR, TILE_URL } from "../lib/tiles";
 import { ago, t } from "../lib/format";
 
-// Tile source is configurable so an offline/authorised tile server can be used during network outages (doc §8.1, D-09).
-const TILE_URL = (import.meta.env.VITE_TILE_URL as string | undefined) ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTR = (import.meta.env.VITE_TILE_ATTRIBUTION as string | undefined) ?? "&copy; OpenStreetMap contributors";
 
 const COLORS: Record<string, string> = {
   reports: "#d97706", incidents: "#dc2626", resources: "#2563eb", hospital: "#059669", fire_station: "#b91c1c",
