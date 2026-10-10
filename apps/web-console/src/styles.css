@@ -109,3 +109,14 @@ textarea { width: 100%; }
 .badge-yellow { background: #facc15; color: #111827; border-color: #eab308; }
 .badge-green { background: #16a34a; color: #fff; border-color: #16a34a; }
 .chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; }
+.sitrep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 20px; }
+.sitrep-grid caption { text-align: start; font-weight: 700; padding: 6px 0; }
+.sitrep-grid td:last-child { font-weight: 600; }
+.sitrep-summary { border-inline-start: 4px solid var(--primary); padding: 8px 12px; margin: 8px 0 12px; background: var(--sel); }
+.ok-text { color: var(--ok); }
+@media print {
+  .side, .no-print, .btn, .banner { display: none !important; }
+  .shell, .main, .split { display: block !important; }
+  .card { border: none; padding: 0; }
+  body { background: #fff; }
+}

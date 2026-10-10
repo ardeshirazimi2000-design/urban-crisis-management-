@@ -26,6 +26,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/relief"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/report"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/resource"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/sitrep"
 )
 
 type App struct {
@@ -70,6 +71,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 	(&relief.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&medical.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&damage.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
+	(&sitrep.Module{Pool: pool, Guard: guard}).Routes(router)
 	(&alert.Module{Pool: pool, Guard: guard, RequireDistinctApprover: cfg.AlertRequireDistinctApprover,
 		MaxValidity: cfg.AlertMaxValidity}).Routes(router)
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)

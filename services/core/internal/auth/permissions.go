@@ -40,7 +40,9 @@ const (
 	CasualtyRead       Permission = "casualty:read"
 	CasualtyRecord     Permission = "casualty:record" // triage and transport within the incident's organisation
 	DamageRead         Permission = "damage:read"
-	DamageAssess       Permission = "damage:assess"            // rapid building assessment (field inspectors, operators, GIS)
+	DamageAssess       Permission = "damage:assess" // rapid building assessment (field inspectors, operators, GIS)
+	SitrepRead         Permission = "sitrep:read"
+	SitrepIssue        Permission = "sitrep:issue"             // issue a numbered situation report with the commander's narrative
 	CasualtyRecordAsgn Permission = "casualty:record_assigned" // the same, only on incidents the responder has an active mission for
 	ShelterUpdate      Permission = "shelter:update"           // record admissions/discharges; capacity and closing need resource:manage
 	AlertReadPublic    Permission = "alert:read_public"
@@ -74,15 +76,17 @@ var RolePermissions = map[Role][]Permission{
 		HospitalRead, CasualtyRecordAsgn, DamageRead, DamageAssess},
 	RoleOperator: {ReportIntake, ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
 		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic,
-		NeedRead, NeedCreate, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, CasualtyRead, CasualtyRecord, DamageRead, DamageAssess},
+		NeedRead, NeedCreate, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, CasualtyRead, CasualtyRecord, DamageRead, DamageAssess,
+		SitrepRead},
 	RoleCommander: {ReportIntake, ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
 		IncidentApprove, IncidentLinkReport, GISRead, ResourceRead, ResourceAllocate, AlertDraft, AlertApprove,
 		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic, NeedRead, NeedCreate, NeedFulfill, ShelterRead,
-		HospitalRead, CasualtyRead, CasualtyRecord, DamageRead},
+		HospitalRead, CasualtyRead, CasualtyRecord, DamageRead, SitrepRead, SitrepIssue},
 	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic,
-		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, DamageRead},
+		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, DamageRead,
+		SitrepRead},
 	RoleGISAnalyst: {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic, NeedRead, ShelterRead, HospitalRead,
-		DamageRead, DamageAssess},
+		DamageRead, DamageAssess, SitrepRead},
 	RoleSecurityAdmin: {UserManage, RoleManage, AuditRead, EventReplay},
 }
 

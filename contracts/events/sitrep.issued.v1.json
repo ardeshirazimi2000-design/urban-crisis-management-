@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sitrep.issued.v1.json",
+  "title": "sitrep.issued v1",
+  "description": "A numbered situation report was issued (aggregate counts only, no personal data).",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "sitrep.issued"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "sitrep_id",
+        "number",
+        "window_hours",
+        "figures"
+      ],
+      "properties": {
+        "sitrep_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_hours": {
+          "type": "integer"
+        },
+        "figures": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

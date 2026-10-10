@@ -22,6 +22,7 @@ tags:
   - {name: relief}
   - {name: medical}
   - {name: damage}
+  - {name: sitrep}
   - {name: alerts}
   - {name: gis}
   - {name: identity}
@@ -392,6 +393,33 @@ paths:
       x-permission: damage:read
       parameters: [{$ref: "#/components/parameters/Id"}]
       responses: {"200": {description: assessment}, "404": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/sitrep:
+    get:
+      tags: [sitrep]
+      summary: Current situation figures across all organisations (counts only), window-based items over window_hours
+      x-permission: sitrep:read
+      parameters: [{name: window_hours, in: query, schema: {type: integer, minimum: 1, maximum: 720, default: 24}}]
+      responses: {"200": {description: figures}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/sitreps:
+    post:
+      tags: [sitrep]
+      summary: Issue a numbered, immutable situation report; figures are computed by the server, narrative required
+      x-permission: sitrep:issue
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [window_hours, summary], properties: {window_hours: {type: integer, minimum: 1, maximum: 720}, summary: {type: string, maxLength: 5000}}}}}}
+      responses: {"201": {description: issued}, "422": {$ref: "#/components/responses/Error"}}
+    get:
+      tags: [sitrep]
+      summary: Issued situation reports, newest first
+      x-permission: sitrep:read
+      responses: {"200": {description: reports}}
+  /api/v1/sitreps/{id}:
+    get:
+      tags: [sitrep]
+      summary: One issued situation report
+      x-permission: sitrep:read
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: report}, "404": {$ref: "#/components/responses/Error"}}
 
   /api/v1/resources:
     post:

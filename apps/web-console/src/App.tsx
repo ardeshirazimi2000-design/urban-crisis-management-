@@ -13,6 +13,7 @@ import { NeedsPage } from "./pages/Needs";
 import { SheltersPage } from "./pages/Shelters";
 import { HospitalsPage } from "./pages/Medical";
 import { DamagePage } from "./pages/Damage";
+import { SitrepPage } from "./pages/Sitrep";
 
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -32,6 +33,7 @@ export function App() {
   if (!me) return <LoginPage />;
   const nav = [
     { to: "/", label: "تصویر عملیاتی", show: can("gis:read") },
+    { to: "/sitrep", label: "گزارش وضعیت", show: can("sitrep:read") },
     { to: "/reports", label: "صف گزارش‌ها", show: can("report:read") },
     { to: "/incidents", label: "حوادث", show: can("incident:read") },
     { to: "/resources", label: "منابع", show: can("resource:read") },
@@ -69,6 +71,7 @@ export function App() {
           <Route path="/shelters" element={<SheltersPage />} />
           <Route path="/hospitals" element={<HospitalsPage />} />
           <Route path="/damage" element={<DamagePage />} />
+          <Route path="/sitrep" element={<SitrepPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/alerts/new" element={<NewAlertPage />} />
           <Route path="/alerts/:id" element={<AlertDetailPage />} />
