@@ -3,7 +3,7 @@ import { api, type FeatureCollection, type Incident, type Report } from "../lib/
 import { useSession } from "../lib/session";
 import { num, t } from "../lib/format";
 import { ErrorBox, Freshness, Section, usePoll } from "../components/ui";
-import { Legend, MapView } from "../components/MapView";
+import { CITIES, Legend, MapView } from "../components/MapView";
 
 const ALL_LAYERS = ["reports", "incidents", "resources", "impact_areas", "hospital", "fire_station", "shelter", "assembly_point", "road_closure", "hazard"];
 
@@ -11,6 +11,11 @@ export function DashboardPage() {
   const { can } = useSession();
   const [layers, setLayers] = useState<string[]>(ALL_LAYERS);
   const [hours, setHours] = useState(24);
+  const [city, setCity] = useState(() => {
+    try { return Number(localStorage.getItem("crisis.city") ?? 0) || 0; } catch { return 0; }
+  });
+  const pickCity = (i: number) => { setCity(i); try { localStorage.setItem("crisis.city", String(i)); } catch { /* per-viewer convenience only */ } };
+  const view = CITIES[city] ?? CITIES[0];
   const map = usePoll(() => api<FeatureCollection>("GET", "/gis/features", { query: { layers: layers.join(","), since_hours: hours } }), 15000, [layers.join(), hours]);
   const queue = usePoll(async () => (can("report:read") ? api<{ items: Report[] }>("GET", "/reports", { query: { limit: 200 } }) : { items: [] }), 15000);
   const incidents = usePoll(async () => (can("incident:read") ? api<{ items: Incident[] }>("GET", "/incidents", { query: { active: "true" } }) : { items: [] }), 15000);
@@ -37,6 +42,11 @@ export function DashboardPage() {
               {t(l)}
             </label>
           ))}
+          <label>شهر
+            <select value={city} onChange={(e) => pickCity(+e.target.value)}>
+              {CITIES.map((c, i) => <option key={c.name} value={i}>{c.name}</option>)}
+            </select>
+          </label>
           <label>بازه زمانی
             <select value={hours} onChange={(e) => setHours(+e.target.value)}>
               <option value={6}>۶ ساعت</option><option value={24}>۲۴ ساعت</option><option value={72}>۷۲ ساعت</option>
@@ -45,7 +55,7 @@ export function DashboardPage() {
         </div>
         <ErrorBox error={map.error} />
         {map.error && map.data && <p className="warn">نمایش آخرین داده معتبر؛ به‌روزرسانی ناموفق بود.</p>}
-        <MapView features={map.data?.features ?? []} />
+        <MapView features={map.data?.features ?? []} center={view.center} zoom={view.zoom} />
         {map.data && <Legend layers={map.data.meta.layers} />}
         <p className="muted small">خطوط نقطه‌چین: داده کهنه، موقعیت تقریبی یا برآورد تأییدنشده. محدوده اثر صرفاً برآورد اولیه است.</p>
       </Section>

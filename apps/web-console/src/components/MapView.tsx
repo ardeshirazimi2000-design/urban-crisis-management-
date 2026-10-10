@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
+import { useEffect, useMemo } from "react";
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { Feature } from "../lib/api";
 import { TILE_ATTR, TILE_URL } from "../lib/tiles";
 import { ago, t } from "../lib/format";
@@ -12,6 +12,19 @@ const COLORS: Record<string, string> = {
 
 export const TEHRAN: [number, number] = [35.7, 51.4];
 
+/** Cities with sample data, for the map's quick jump. */
+export const CITIES: { name: string; center: [number, number]; zoom: number }[] = [
+  { name: "تهران", center: TEHRAN, zoom: 12 },
+  { name: "سنندج", center: [35.3145, 46.9923], zoom: 13 },
+];
+
+/** MapContainer reads center/zoom only once; this follows later changes (e.g. a city switch). */
+function Recenter({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+  useEffect(() => { map.setView(center, zoom); }, [map, center[0], center[1], zoom]);
+  return null;
+}
+
 export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoom = 12 }: {
   features: Feature[]; height?: number; center?: [number, number]; zoom?: number;
   onSelect?: (f: Feature) => void;
@@ -21,6 +34,7 @@ export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoo
   return (
     <div style={{ height }} className="map" dir="ltr">
       <MapContainer center={center} zoom={zoom} style={{ height: "100%" }} preferCanvas>
+        <Recenter center={center} zoom={zoom} />
         <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
         {shapes.map((f) => {
           const layer = String(f.properties.layer);
