@@ -10,12 +10,12 @@ function ClickHandler({ onPick }: { onPick: (p: PickedPoint) => void }) {
 }
 
 /** Click-to-place location picker; the dashed circle shows the estimated accuracy. */
-export function MapPicker({ value, accuracyM, onPick, height = 300 }: {
-  value: PickedPoint | null; accuracyM: number; onPick: (p: PickedPoint) => void; height?: number;
+export function MapPicker({ value, accuracyM, onPick, height = 300, center = TEHRAN }: {
+  value: PickedPoint | null; accuracyM: number; onPick: (p: PickedPoint) => void; height?: number; center?: [number, number];
 }) {
   return (
     <div style={{ height }} className="map picker" dir="ltr" data-testid="map-picker">
-      <MapContainer center={value ? [value.lat, value.lng] : TEHRAN} zoom={12} style={{ height: "100%" }}>
+      <MapContainer center={value ? [value.lat, value.lng] : center} zoom={12} style={{ height: "100%" }}>
         <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
         <ClickHandler onPick={onPick} />
         {value && (

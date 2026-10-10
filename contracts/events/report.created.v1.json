@@ -63,7 +63,8 @@
         "source": {
           "enum": [
             "citizen_app",
-            "phone"
+            "phone",
+            "damage_assessment"
           ],
           "description": "intake channel; caller identity is never included"
         }

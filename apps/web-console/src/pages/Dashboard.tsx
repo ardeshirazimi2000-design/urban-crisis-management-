@@ -5,7 +5,7 @@ import { num, t } from "../lib/format";
 import { ErrorBox, Freshness, Section, usePoll } from "../components/ui";
 import { CITIES, Legend, MapView } from "../components/MapView";
 
-const ALL_LAYERS = ["reports", "incidents", "resources", "impact_areas", "hospital", "fire_station", "shelter", "assembly_point", "road_closure", "hazard"];
+const ALL_LAYERS = ["reports", "incidents", "resources", "damage", "impact_areas", "hospital", "fire_station", "shelter", "assembly_point", "road_closure", "hazard"];
 
 export function DashboardPage() {
   const { can } = useSession();

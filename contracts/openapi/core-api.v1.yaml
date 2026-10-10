@@ -21,6 +21,7 @@ tags:
   - {name: resources}
   - {name: relief}
   - {name: medical}
+  - {name: damage}
   - {name: alerts}
   - {name: gis}
   - {name: identity}
@@ -365,6 +366,32 @@ paths:
       parameters: [{$ref: "#/components/parameters/Id"}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/CasualtyStatusRequest"}}}}
       responses: {"409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/damage-assessments:
+    post:
+      tags: [damage]
+      summary: Rapid building assessment (green/yellow/red; yellow and red need observations); people_trapped raises a review-queue report
+      x-permission: damage:assess
+      parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/DamageRequest"}}}}
+      responses: {"201": {description: assessed}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+    get:
+      tags: [damage]
+      summary: Current assessments (latest per building unless include_superseded=true) with counts per tag
+      x-permission: damage:read
+      parameters:
+        - {name: tag, in: query, schema: {type: string, enum: [green, yellow, red]}}
+        - {name: incident_id, in: query, schema: {type: string, format: uuid}}
+        - {name: include_superseded, in: query, schema: {type: boolean}}
+        - {$ref: "#/components/parameters/Limit"}
+      responses: {"200": {description: assessments}}
+  /api/v1/damage-assessments/{id}:
+    get:
+      tags: [damage]
+      summary: An assessment with the building's inspection history
+      x-permission: damage:read
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: assessment}, "404": {$ref: "#/components/responses/Error"}}
 
   /api/v1/resources:
     post:
@@ -797,6 +824,23 @@ components:
         transport_resource_id: {type: string, format: uuid}
         reason: {type: string, description: required for deceased and for a diverting hospital}
         version: {type: integer}
+    DamageRequest:
+      type: object
+      required: [location, building_use, tag]
+      properties:
+        incident_id: {type: string, format: uuid}
+        location: {$ref: "#/components/schemas/Point"}
+        address_text: {type: string, maxLength: 300}
+        building_use: {type: string, enum: [residential, school, hospital, commercial, government, industrial, religious, other]}
+        floors: {type: integer, minimum: 1, maximum: 200}
+        tag: {type: string, enum: [green, yellow, red]}
+        observations:
+          type: array
+          items: {type: string, enum: [collapse_total, collapse_partial, leaning, major_cracks, column_damage, foundation, falling_hazard, gas_leak, fire, water_leak, adjacent_hazard]}
+        people_trapped: {type: boolean}
+        occupants_estimate: {type: integer, minimum: 0}
+        notes: {type: string, maxLength: 1000}
+        supersedes: {type: string, format: uuid, description: the assessment this re-inspection replaces}
     AssignRequest:
       type: object
       required: [resource_id, reason]

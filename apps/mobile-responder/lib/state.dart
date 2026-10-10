@@ -146,6 +146,27 @@ class ResponderState extends ChangeNotifier {
     await sync();
   }
 
+  /// Rapid building assessment from the field; offline-safe and created exactly once like casualties.
+  Future<void> assessBuilding({required GeoLocation at, required String tag, required String buildingUse,
+      List<String> observations = const [], bool peopleTrapped = false, int? floors, String address = '', String notes = '',
+      String? incidentId}) async {
+    await queue.enqueue(kind: 'damage.assess', method: 'POST', path: '/damage-assessments', body: {
+      'location': {'lat': at.lat, 'lng': at.lng},
+      'tag': tag,
+      'building_use': buildingUse,
+      'observations': observations,
+      'people_trapped': peopleTrapped,
+      if (floors != null) 'floors': floors,
+      if (address.trim().isNotEmpty) 'address_text': address.trim(),
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (incidentId != null) 'incident_id': incidentId,
+    });
+    notifyListeners();
+    await sync();
+  }
+
+  List<QueuedOp> get assessments => queue.all.where((o) => o.kind == 'damage.assess').toList().reversed.toList();
+
   /// Casualties this device recorded for an incident (sent or still queued), newest first.
   List<QueuedOp> casualtiesFor(String incidentId) => queue.all
       .where((o) => o.kind == 'casualty.record' && o.path == '/incidents/$incidentId/casualties')

@@ -21,7 +21,7 @@ import (
 )
 
 var ReferenceLayers = []string{"hospital", "fire_station", "shelter", "road_closure", "hazard", "assembly_point"}
-var DynamicLayers = []string{"reports", "incidents", "resources", "impact_areas"}
+var DynamicLayers = []string{"reports", "incidents", "resources", "impact_areas", "damage"}
 
 const ImpactAlgorithm = "radial-buffer-v1"
 
@@ -212,6 +212,32 @@ func (m *Module) features(w http.ResponseWriter, r *http.Request) error {
 				stale := typ != "shelter" && (seen == nil || time.Since(*seen) > m.ResourceStaleAfter)
 				add(l, Feature{Type: "Feature", ID: "resource:" + id.String(), Geometry: pointJSON(Point{Lat: lat, Lng: lng}),
 					Properties: map[string]any{"id": id, "resource_type": typ, "name": name, "status": st, "last_seen_at": seen}}, stale)
+			}
+			rows.Close()
+		case l == "damage":
+			if !p.Has(auth.DamageRead) {
+				meta[l] = &layerMeta{Note: "no_permission"}
+				continue
+			}
+			rows, err := m.Pool.Query(ctx, `SELECT id, tag, building_use, people_trapped, created_at,
+				ST_Y(location::geometry), ST_X(location::geometry) FROM damage_assessments
+				WHERE superseded_at IS NULL AND location && ST_MakeEnvelope($1,$2,$3,$4,4326)::geography
+				ORDER BY created_at DESC LIMIT 5000`, env...)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var id uuid.UUID
+				var tag, use string
+				var trapped bool
+				var at time.Time
+				var lat, lng float64
+				if err := rows.Scan(&id, &tag, &use, &trapped, &at, &lat, &lng); err != nil {
+					rows.Close()
+					return err
+				}
+				add(l, Feature{Type: "Feature", ID: "damage:" + id.String(), Geometry: pointJSON(Point{Lat: lat, Lng: lng}),
+					Properties: map[string]any{"id": id, "tag": tag, "building_use": use, "people_trapped": trapped, "assessed_at": at}}, false)
 			}
 			rows.Close()
 		case l == "impact_areas":

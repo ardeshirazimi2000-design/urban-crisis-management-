@@ -5,7 +5,11 @@ import { TILE_ATTR, TILE_URL } from "../lib/tiles";
 import { ago, t } from "../lib/format";
 
 
+/** Building assessment colours follow the physical placards. */
+export const TAG_COLORS: Record<string, string> = { green: "#16a34a", yellow: "#eab308", red: "#dc2626" };
+
 const COLORS: Record<string, string> = {
+  damage: "#b45309",
   reports: "#d97706", incidents: "#dc2626", resources: "#2563eb", hospital: "#059669", fire_station: "#b91c1c",
   shelter: "#7c3aed", assembly_point: "#0891b2", road_closure: "#111827", hazard: "#ea580c", impact_areas: "#dc2626",
 };
@@ -59,11 +63,15 @@ export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoo
           const approx = f.properties.precision === "approximate";
           return (
             <CircleMarker key={f.id} center={[lat, lng]} radius={layer === "incidents" ? 10 : 7}
-              pathOptions={{ color: COLORS[layer] ?? "#444", fillOpacity: stale ? 0.15 : 0.7, dashArray: stale || approx ? "3 3" : undefined }}
+              pathOptions={{ color: (layer === "damage" ? TAG_COLORS[String(f.properties.tag)] : COLORS[layer]) ?? "#444",
+                fillOpacity: stale ? 0.15 : 0.7, dashArray: stale || approx ? "3 3" : undefined }}
               eventHandlers={{ click: () => onSelect?.(f) }}>
               <Popup>
                 <div dir="rtl" className="popup">
-                  <b>{t(layer)}</b>: {String(f.properties.name ?? f.properties.code ?? t(String(f.properties.report_type ?? f.properties.resource_type ?? "")))}
+                  <b>{t(layer)}</b>: {layer === "damage" ? `${t(String(f.properties.tag))} — ${t(String(f.properties.building_use))}`
+                    : String(f.properties.name ?? f.properties.code ?? t(String(f.properties.report_type ?? f.properties.resource_type ?? "")))}
+                  {f.properties.people_trapped ? <div className="warn">احتمال افراد محبوس</div> : null}
+                  {f.properties.assessed_at ? <div>ارزیابی: {ago(String(f.properties.assessed_at))}</div> : null}
                   {f.properties.status ? <div>وضعیت: {t(String(f.properties.status))}</div> : null}
                   {f.properties.received_at ? <div>دریافت: {ago(String(f.properties.received_at))}</div> : null}
                   {f.properties.last_seen_at !== undefined ? <div>آخرین موقعیت: {ago(f.properties.last_seen_at as string | null)}</div> : null}

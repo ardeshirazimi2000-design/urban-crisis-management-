@@ -105,3 +105,7 @@ textarea { width: 100%; }
 .triage-pick button { min-width: 110px; }
 .triage-pick button.on { outline: 3px solid var(--primary); }
 .nowrap { white-space: nowrap; }
+.badge-red { background: #dc2626; color: #fff; border-color: #dc2626; }
+.badge-yellow { background: #facc15; color: #111827; border-color: #eab308; }
+.badge-green { background: #16a34a; color: #fff; border-color: #16a34a; }
+.chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; }

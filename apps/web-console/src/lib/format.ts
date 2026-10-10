@@ -63,6 +63,12 @@ export const L: Record<string, string> = {
   immediate: "فوری (قرمز)", delayed: "تأخیری (زرد)", minor: "سرپایی (سبز)", deceased: "فوت‌شده (سیاه)",
   transported: "در حال انتقال", admitted: "بستری", released: "ترخیص",
   child: "کودک", adult: "بزرگسال", elderly: "سالمند", female: "زن", male: "مرد",
+  // damage assessment
+  damage: "ارزیابی خسارت ساختمان", damage_assessment: "ارزیابی خسارت", green: "سبز (قابل استفاده)", yellow: "زرد (استفاده محدود)",
+  red: "قرمز (ناایمن)", residential: "مسکونی", school: "مدرسه", commercial: "تجاری", government: "اداری", industrial: "صنعتی",
+  religious: "مذهبی", collapse_total: "ریزش کامل", collapse_partial: "ریزش بخشی", leaning: "کج‌شدگی ساختمان",
+  major_cracks: "ترک‌های عمده", column_damage: "آسیب ستون/تیر", foundation: "آسیب پی", falling_hazard: "خطر سقوط اجزا (نما، دودکش)",
+  water_leak: "نشت آب", adjacent_hazard: "خطر از ساختمان مجاور",
   // roles
   CITIZEN: "شهروند", RESPONDER: "امدادگر", OPERATOR: "اپراتور", COMMANDER: "فرمانده", RESOURCE_MANAGER: "مدیر منابع",
   GIS_ANALYST: "کارشناس GIS", SECURITY_ADMIN: "مدیر امنیت",
@@ -77,6 +83,10 @@ export const tAttempt = (k: string) => ATTEMPT[k] ?? t(k);
 export const REPORT_TYPES = ["structural_damage", "building_collapse", "trapped_people", "injury", "fire", "gas_leak",
   "road_blocked", "flooding", "power_outage", "water_outage", "landslide", "hazmat", "other"];
 export const SEVERITIES = ["low", "medium", "high", "critical"];
+export const DAMAGE_TAGS = ["red", "yellow", "green"];
+export const BUILDING_USES = ["residential", "school", "hospital", "commercial", "government", "industrial", "religious", "other"];
+export const OBSERVATIONS = ["collapse_total", "collapse_partial", "leaning", "major_cracks", "column_damage", "foundation",
+  "falling_hazard", "gas_leak", "fire", "water_leak", "adjacent_hazard"];
 export const TRIAGE = ["immediate", "delayed", "minor", "deceased"];
 /** ER status words differ from generic open/closed. */
 export const ER_LABEL: Record<string, string> = {

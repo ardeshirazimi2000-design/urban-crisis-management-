@@ -258,6 +258,13 @@ func insertReport(ctx context.Context, tx pgx.Tx, reporter uuid.UUID, source str
 		CorrelationID: httpx.CorrelationID(ctx), PossibleDuplicates: dups}, nil
 }
 
+// RaiseFromSystem files a report into the review queue on behalf of another module (e.g. a building
+// assessment that found trapped people). It is reviewed like any other report, never auto-accepted.
+func RaiseFromSystem(ctx context.Context, tx pgx.Tx, actor uuid.UUID, source string, req CreateRequest) (uuid.UUID, error) {
+	r, err := insertReport(ctx, tx, actor, source, req)
+	return r.ReportID, err
+}
+
 func truncateRunes(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {
 		return s

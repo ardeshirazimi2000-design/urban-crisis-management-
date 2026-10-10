@@ -21,11 +21,13 @@ void main() {
   late int version;
   late ResponderState state;
   late Map<String, String> casualties;
+  late List<String> assessments;
   var loseResponse = false;
 
   setUp(() async {
     online = true;
     casualties = {};
+    assessments = [];
     loseResponse = false;
     status = 'assigned';
     version = 1;
@@ -33,6 +35,10 @@ void main() {
       if (!online) throw http.ClientException('offline');
       if (req.url.path.endsWith('/assignments/mine')) {
         return http.Response(jsonEncode({'items': [assignment(status, version)]}), 200, headers: _utf8);
+      }
+      if (req.url.path.endsWith('/damage-assessments')) {
+        assessments.add(req.headers['Idempotency-Key']!);
+        return http.Response(jsonEncode({'id': 'd1', 'tag': 'red'}), 201, headers: _utf8);
       }
       if (req.url.path.endsWith('/casualties')) {
         final key = req.headers['Idempotency-Key']!;
@@ -149,5 +155,16 @@ void main() {
     await state.sync();
     expect(casualties, hasLength(1), reason: 'exactly one casualty on the server');
     expect(casualtyLine(state.casualtiesFor('i1').single), startsWith('T-00001'));
+  });
+
+  test('building assessment is queued offline and sent with an idempotency key', () async {
+    online = false;
+    await state.assessBuilding(at: const GeoLocation(lat: 35.3, lng: 47.0, accuracyM: 10), tag: 'red', buildingUse: 'school',
+        observations: ['collapse_partial'], peopleTrapped: true, incidentId: 'i1');
+    expect(assessmentLine(state.assessments.single), contains('در صف'));
+    online = true;
+    await state.sync();
+    expect(assessments, hasLength(1));
+    expect(assessmentLine(state.assessments.single), contains('ثبت شد'));
   });
 }
