@@ -34,6 +34,23 @@ type DevTokens struct {
 
 var errAccessCode = httpx.NewError(http.StatusUnauthorized, "ACCESS_CODE_INVALID", "کد دسترسی آزمایشی نادرست است")
 
+// normalizeCode makes typing on phones forgiving: Persian/Arabic digits, upper case (auto-capitalisation),
+// spaces and invisible characters (ZWNJ, RTL marks) are mapped/removed. Codes are lower-case hex.
+func normalizeCode(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= '۰' && r <= '۹':
+			b.WriteRune('0' + (r - '۰'))
+		case r >= '٠' && r <= '٩':
+			b.WriteRune('0' + (r - '٠'))
+		case (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || r == '-' || r == '_':
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func codeEq(a, b string) bool {
 	return b != "" && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
@@ -65,10 +82,10 @@ func (d *DevTokens) token(w http.ResponseWriter, r *http.Request) error {
 	}
 	citizenOnly := false
 	if d.StaffCode != "" {
-		code := strings.TrimSpace(req.AccessCode)
+		code := normalizeCode(req.AccessCode)
 		switch {
-		case codeEq(code, d.StaffCode):
-		case codeEq(code, d.CitizenCode):
+		case codeEq(code, normalizeCode(d.StaffCode)):
+		case codeEq(code, normalizeCode(d.CitizenCode)):
 			citizenOnly = true
 		default:
 			slog.WarnContext(ctx, "dev_token_access_code_rejected", "ip", httpx.ClientIP(r))

@@ -42,7 +42,8 @@ export function LoginPage() {
         </label>
         <label>
           کد دسترسی کارکنان <span className="muted small">(در پایان نصب سرور نمایش داده می‌شود)</span>
-          <input type="password" autoComplete="current-password" dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} />
+          <input type="text" name="access-code" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} />
         </label>
         <button type="submit" className="btn primary" disabled={busy}>
           ورود

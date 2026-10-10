@@ -47,6 +47,7 @@ func TestDevTokenAccessCodes(t *testing.T) {
 		{"citizen code on non-citizen subject", map[string]any{"subject": staff, "access_code": "citizen-code-456"}, 403},
 		{"staff code", map[string]any{"subject": staff, "grants": admin, "access_code": " staff-code-123 "}, 200},
 		{"citizen code", map[string]any{"subject": citizen, "access_code": "citizen-code-456"}, 200},
+		{"staff code typed on a phone (Persian digits, capitals, ZWNJ)", map[string]any{"subject": staff, "grants": admin, "access_code": "Staff-Code-۱۲\u200c۳"}, 200},
 		{"citizen code cannot demote a staff account", map[string]any{"subject": "citizen-x" + staff, "grants": admin, "access_code": "staff-code-123"}, 200},
 		{"...even with a citizen- subject", map[string]any{"subject": "citizen-x" + staff, "access_code": "citizen-code-456"}, 403},
 	}
