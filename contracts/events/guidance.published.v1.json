@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "guidance.published.v1.json",
+  "title": "guidance.published v1",
+  "description": "A guidance card version was approved and published to the citizens' assistant.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "guidance.published"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "card_id",
+        "slug",
+        "version",
+        "kb_version"
+      ],
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "kb_version": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,11 @@ class CitizenState extends ChangeNotifier {
   final ApiClient api;
   final OfflineQueue queue;
   final EncryptedJsonStore alertCache;
+
+  /// Last downloaded guidance for the assistant; the copy bundled in the app is used until then.
+  final EncryptedJsonStore? guidanceCache;
+  final Future<String> Function()? bundledGuidance;
+  KnowledgeBase? guidance;
 
   /// Last nearby-shelter list, kept encrypted so it can still be shown (with its age) when offline.
   final EncryptedJsonStore? shelterCache;
@@ -39,7 +45,8 @@ class CitizenState extends ChangeNotifier {
   Timer? _timer;
   StreamSubscription<List<QueuedOp>>? _sub;
 
-  CitizenState({required this.api, required this.queue, required this.alertCache, this.shelterCache, required this.readToken,
+  CitizenState({required this.api, required this.queue, required this.alertCache, this.shelterCache, this.guidanceCache,
+      this.bundledGuidance, required this.readToken,
       required this.writeToken, this.devAuth = true, Future<String?> Function(String)? readPref,
       Future<void> Function(String, String?)? writePref})
       : readPref = readPref ?? _noPref,
@@ -139,6 +146,33 @@ class CitizenState extends ChangeNotifier {
       lastError = e.message;
     }
     notifyListeners();
+  }
+
+  /// Loads the newest guidance available offline: the downloaded copy if any, else the bundled one.
+  Future<KnowledgeBase?> loadGuidance() async {
+    if (guidance != null) return guidance;
+    final cached = await guidanceCache?.read() as Map<String, dynamic>?;
+    if (cached != null) {
+      guidance = KnowledgeBase.fromJson(cached);
+    } else if (bundledGuidance != null) {
+      guidance = KnowledgeBase.fromJson(jsonDecode(await bundledGuidance!()) as Map<String, dynamic>);
+    }
+    notifyListeners();
+    return guidance;
+  }
+
+  /// Downloads approved guidance when the server has a newer version. Failures keep the current set.
+  Future<void> refreshGuidance() async {
+    try {
+      final fresh = await api.guidance();
+      if (fresh.cards.isNotEmpty && fresh.version > (guidance?.version ?? -1)) {
+        guidance = fresh;
+        await guidanceCache?.write(fresh.toJson());
+        notifyListeners();
+      }
+    } on ApiException catch (e) {
+      offline = offline || e.isNetwork;
+    }
   }
 
   /// Nearest shelters accepting people. On failure the previous list stays visible with its fetch time.

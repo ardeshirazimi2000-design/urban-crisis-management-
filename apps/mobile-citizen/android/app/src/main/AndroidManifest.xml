@@ -45,6 +45,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Assistant: emergency call buttons open the dialer (nothing is dialled automatically). -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
         <!-- Shelter navigation: map apps (geo:) and the browser fallback. -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>

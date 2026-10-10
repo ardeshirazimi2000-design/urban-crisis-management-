@@ -30,3 +30,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Approved guidance bundled for offline use; identical to services/core/seeds/guidance.fa.json (tested).
+    - assets/guidance.fa.json

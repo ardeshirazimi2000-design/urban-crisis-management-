@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/logx"
@@ -46,6 +47,11 @@ func main() {
 			slog.Error("seed", "err", err.Error())
 			os.Exit(1)
 		}
-		slog.Info("dev seed loaded")
+		n, err := guidance.Seed(ctx, pool, seeds.GuidanceFA)
+		if err != nil {
+			slog.Error("guidance seed", "err", err.Error())
+			os.Exit(1)
+		}
+		slog.Info("dev seed loaded", "guidance_cards_added", n)
 	}
 }

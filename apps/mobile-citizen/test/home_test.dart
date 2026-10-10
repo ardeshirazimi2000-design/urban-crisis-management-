@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crisis_citizen/screens.dart';
 import 'package:crisis_citizen/state.dart';
@@ -119,6 +120,42 @@ void main() {
     expect(restarted.shelters.single.name, 'سالن ورزشی');
     expect(restarted.sheltersFetchedAt, isNotNull);
     restarted.dispose();
+  });
+
+  testWidgets('assistant answers from approved guidance on the device, emergencies with call buttons', (tester) async {
+    final requests = <Uri>[];
+    final client = MockClient((req) async {
+      requests.add(req.url);
+      return http.Response('{}', 404);
+    });
+    final api = ApiClient(Uri.parse('http://x/api/v1'), () async => 't', client: client);
+    final key = StaticKeyProvider(List.filled(32, 7));
+    final s = CitizenState(api: api, queue: OfflineQueue(EncryptedJsonStore(MemoryByteStore(), key), api),
+        alertCache: EncryptedJsonStore(MemoryByteStore(), key), guidanceCache: EncryptedJsonStore(MemoryByteStore(), key),
+        bundledGuidance: () => File('assets/guidance.fa.json').readAsString(), readToken: () async => 't', writeToken: (_) async {});
+    await tester.runAsync(() => s.loadGuidance());
+    await tester.pumpWidget(MaterialApp(home: Directionality(textDirection: TextDirection.rtl, child: AssistantScreen(state: s))));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(find.text('بوی گاز می‌آید'), findsOneWidget); // offered as a suggestion
+
+    await tester.enterText(find.byType(TextField), 'بوی گاز میاد چیکار کنم');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('شیر اصلی گاز'), findsOneWidget);
+    expect(find.text('تماس با ۱۹۴'), findsOneWidget);
+    expect(requests.where((u) => u.queryParameters.values.any((v) => v.contains('گاز'))), isEmpty,
+        reason: 'the question must never leave the device');
+
+    await tester.enterText(find.byType(TextField), 'قیمت دلار امروز');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('راهنمای تأییدشده‌ای پیدا نشد'), findsOneWidget);
+  });
+
+  test('bundled guidance is identical to the server seed', () {
+    expect(File('assets/guidance.fa.json').readAsStringSync(),
+        File('../../services/core/seeds/guidance.fa.json').readAsStringSync());
   });
 
   test('expired cached alerts are not shown', () {

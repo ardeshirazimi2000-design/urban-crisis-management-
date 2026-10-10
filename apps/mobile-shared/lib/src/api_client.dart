@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import 'assistant.dart';
 import 'models.dart';
 
 const _uuid = Uuid();
@@ -77,6 +78,12 @@ class ApiClient {
   Future<List<PublicAlert>> activeAlerts(double lat, double lng) async {
     final d = await request('GET', '/alerts/public', query: {'lat': '$lat', 'lng': '$lng'}) as Map<String, dynamic>;
     return (d['items'] as List).map((e) => PublicAlert.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Approved guidance for the crisis assistant (the question itself is never sent).
+  Future<KnowledgeBase> guidance() async {
+    final d = await request('GET', '/guidance') as Map<String, dynamic>;
+    return KnowledgeBase.fromJson(d);
   }
 
   /// Nearest shelters (up to 5, within 50 km) that are accepting people now.

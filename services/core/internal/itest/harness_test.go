@@ -21,6 +21,7 @@ import (
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/auth"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/media"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
@@ -60,6 +61,10 @@ func TestMain(m *testing.M) {
 	}
 	if _, err := pool.Exec(ctx, seeds.Dev); err != nil {
 		fmt.Println("seed:", err)
+		os.Exit(1)
+	}
+	if _, err := guidance.Seed(ctx, pool, seeds.GuidanceFA); err != nil {
+		fmt.Println("guidance seed:", err)
 		os.Exit(1)
 	}
 	for k, v := range map[string]string{"APP_ENV": "test", "AUTH_MODE": "dev", "DEV_JWT_SECRET": devSecret,

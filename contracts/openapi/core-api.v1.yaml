@@ -23,6 +23,7 @@ tags:
   - {name: medical}
   - {name: damage}
   - {name: sitrep}
+  - {name: guidance}
   - {name: alerts}
   - {name: gis}
   - {name: identity}
@@ -420,6 +421,58 @@ paths:
       x-permission: sitrep:read
       parameters: [{$ref: "#/components/parameters/Id"}]
       responses: {"200": {description: report}, "404": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/guidance:
+    get:
+      tags: [guidance]
+      summary: Published assistant guidance and the knowledge-base version (questions are matched on the device, never sent)
+      x-permission: guidance:read_public
+      responses: {"200": {description: "kb_version + cards"}}
+  /api/v1/guidance/admin:
+    get:
+      tags: [guidance]
+      summary: All cards with every version (published, pending, rejected, superseded)
+      x-permission: guidance:edit or guidance:approve
+      responses: {"200": {description: cards}}
+  /api/v1/guidance/cards:
+    post:
+      tags: [guidance]
+      summary: Create a card; its first version waits for approval by another person
+      x-permission: guidance:edit
+      requestBody: {required: true, content: {application/json: {schema: {allOf: [{$ref: "#/components/schemas/GuidanceContent"}, {type: object, required: [slug], properties: {slug: {type: string, pattern: "^[a-z0-9-]{2,60}$"}}}]}}}}
+      responses: {"201": {description: pending}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/guidance/cards/{id}/versions:
+    post:
+      tags: [guidance]
+      summary: Propose a new version (one pending per card); the published text stays live until approval
+      x-permission: guidance:edit
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/GuidanceContent"}}}}
+      responses: {"201": {description: pending}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/guidance/cards/{id}/retire:
+    post:
+      tags: [guidance]
+      summary: Withdraw a card from citizens (reason required); history is kept
+      x-permission: guidance:approve
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string}}}}}}
+      responses: {"200": {description: ok}, "403": {$ref: "#/components/responses/Error"}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/guidance/versions/{id}/approve:
+    post:
+      tags: [guidance]
+      summary: Publish a pending version (403 FOUR_EYES_REQUIRED for its own author)
+      x-permission: guidance:approve
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {reason: {type: string}}}}}}
+      responses: {"200": {description: ok}, "403": {$ref: "#/components/responses/Error"}, "409": {$ref: "#/components/responses/Error"}}
+  /api/v1/guidance/versions/{id}/reject:
+    post:
+      tags: [guidance]
+      summary: Reject a pending version (reason required)
+      x-permission: guidance:approve
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string}}}}}}
+      responses: {"200": {description: ok}, "403": {$ref: "#/components/responses/Error"}, "409": {$ref: "#/components/responses/Error"}}
 
   /api/v1/resources:
     post:
@@ -869,6 +922,16 @@ components:
         occupants_estimate: {type: integer, minimum: 0}
         notes: {type: string, maxLength: 1000}
         supersedes: {type: string, format: uuid, description: the assessment this re-inspection replaces}
+    GuidanceContent:
+      type: object
+      required: [title, category, keywords, body]
+      properties:
+        title: {type: string, maxLength: 120}
+        category: {type: string, enum: [earthquake, after_quake, trapped, gas, fire, medical, flood, shelter, alerts, preparedness, family, psychological, utilities, general]}
+        keywords: {type: array, minItems: 1, maxItems: 40, items: {type: string, maxLength: 60}}
+        body: {type: string, maxLength: 3000}
+        actions: {type: array, items: {type: string, enum: ["call:110", "call:112", "call:115", "call:121", "call:122", "call:125", "call:194", report, shelters, alerts]}}
+        emergency: {type: boolean}
     AssignRequest:
       type: object
       required: [resource_id, reason]

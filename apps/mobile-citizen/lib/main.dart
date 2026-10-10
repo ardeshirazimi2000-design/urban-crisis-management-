@@ -1,5 +1,6 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'platform.dart';
@@ -16,6 +17,8 @@ Future<void> main() async {
     queue: OfflineQueue(await openStore('report_queue'), api),
     alertCache: await openStore('alert_cache'),
     shelterCache: await openStore('shelter_cache'),
+    guidanceCache: await openStore('guidance_cache'),
+    bundledGuidance: () => rootBundle.loadString('assets/guidance.fa.json'),
     readToken: SecureTokens.read,
     writeToken: SecureTokens.write,
     readPref: SecureTokens.readPref,

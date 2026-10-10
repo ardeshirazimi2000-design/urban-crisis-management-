@@ -23,6 +23,13 @@ class HomeScreen extends StatelessWidget {
               onRefresh: state.sync,
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 const EmergencyNumbers(),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52), backgroundColor: const Color(0xFF0F766E)),
+                  icon: const Icon(Icons.support_agent),
+                  label: const Text('دستیار بحران: چه کار کنم؟'),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AssistantScreen(state: state))),
+                ),
                 if (state.needsAccessCode) AccessCodeCard(state: state),
                 if (state.offline)
                   const Card(
@@ -410,4 +417,212 @@ class _SheltersScreenState extends State<SheltersScreen> {
           );
         },
       );
+}
+
+/// Crisis assistant: answers only with approved guidance cards, matched on the phone (offline, private).
+class AssistantScreen extends StatefulWidget {
+  final CitizenState state;
+  const AssistantScreen({super.key, required this.state});
+
+  @override
+  State<AssistantScreen> createState() => _AssistantScreenState();
+}
+
+class _Turn {
+  final String question;
+  final AssistantAnswer answer;
+  _Turn(this.question, this.answer);
+}
+
+class _AssistantScreenState extends State<AssistantScreen> {
+  final _q = TextEditingController();
+  final _scroll = ScrollController();
+  final _turns = <_Turn>[];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.loadGuidance().then((_) => widget.state.refreshGuidance());
+  }
+
+  @override
+  void dispose() {
+    _q.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _ask(String question) {
+    final kb = widget.state.guidance;
+    if (kb == null || question.trim().isEmpty) return;
+    setState(() => _turns.add(_Turn(question.trim(), Assistant(kb).answer(question))));
+    _q.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: widget.state,
+        builder: (context, _) {
+          final kb = widget.state.guidance;
+          return Scaffold(
+            appBar: AppBar(title: const Text('دستیار بحران')),
+            body: Column(children: [
+              Container(
+                width: double.infinity,
+                color: const Color(0xFFFFF4DC),
+                padding: const EdgeInsets.all(8),
+                child: const Text('فقط راهنمای تأییدشده نمایش داده می‌شود و جایگزین تماس با ۱۱۲ و ۱۱۵ نیست. '
+                    'سؤال شما از گوشی خارج نمی‌شود و بدون اینترنت هم کار می‌کند.', style: TextStyle(fontSize: 12)),
+              ),
+              Expanded(
+                child: kb == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(controller: _scroll, padding: const EdgeInsets.all(12), children: [
+                        if (_turns.isEmpty) ...[
+                          const Text('سؤال خود را بنویسید یا یکی از موارد زیر را انتخاب کنید:'),
+                          const SizedBox(height: 8),
+                          Wrap(spacing: 6, runSpacing: 6, children: [
+                            for (final c in Assistant(kb).suggestions)
+                              ActionChip(
+                                avatar: c.emergency ? const Icon(Icons.warning_amber, color: Color(0xFFDC2626), size: 18) : null,
+                                label: Text(c.title),
+                                onPressed: () => _ask(c.title),
+                              ),
+                          ]),
+                        ],
+                        for (final t in _turns) ...[
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(color: const Color(0xFFE0E7FF), borderRadius: BorderRadius.circular(12)),
+                              child: Text(t.question),
+                            ),
+                          ),
+                          if (!t.answer.matched) _NoAnswer(onSuggest: _ask, suggestions: Assistant(kb).suggestions),
+                          for (final (i, c) in t.answer.cards.indexed) GuidanceCardView(card: c, state: widget.state, primary: i == 0, kbVersion: kb.version),
+                        ],
+                      ]),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _q,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: _ask,
+                        decoration: const InputDecoration(hintText: 'مثلاً: بوی گاز می‌آید چه کنم؟', border: OutlineInputBorder(), isDense: true),
+                      ),
+                    ),
+                    IconButton.filled(icon: const Icon(Icons.send), tooltip: 'پرسیدن', onPressed: () => _ask(_q.text)),
+                  ]),
+                ),
+              ),
+            ]),
+          );
+        },
+      );
+}
+
+class _NoAnswer extends StatelessWidget {
+  final void Function(String) onSuggest;
+  final List<GuidanceCard> suggestions;
+  const _NoAnswer({required this.onSuggest, required this.suggestions});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('برای این سؤال راهنمای تأییدشده‌ای پیدا نشد. اگر در خطر هستید همین حالا تماس بگیرید.'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [for (final n in ['112', '115', '125']) CallButton(number: n)]),
+            const SizedBox(height: 8),
+            const Text('یا یکی از این موارد:'),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final c in suggestions.take(6)) ActionChip(label: Text(c.title), onPressed: () => onSuggest(c.title)),
+            ]),
+          ]),
+        ),
+      );
+}
+
+/// Opens the dialer with the number filled in; the citizen presses call (nothing is dialled automatically).
+class CallButton extends StatelessWidget {
+  final String number;
+  const CallButton({super.key, required this.number});
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+        style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+        icon: const Icon(Icons.call),
+        label: Text('تماس با ${faDigits(number)}'),
+        onPressed: () async {
+          final ok = await launchUrl(Uri.parse('tel:$number'));
+          if (!ok && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('شماره ${faDigits(number)} را با تلفن بگیرید.')));
+          }
+        },
+      );
+}
+
+class GuidanceCardView extends StatelessWidget {
+  final GuidanceCard card;
+  final CitizenState state;
+  final bool primary;
+  final int kbVersion;
+  const GuidanceCardView({super.key, required this.card, required this.state, required this.primary, required this.kbVersion});
+
+  @override
+  Widget build(BuildContext context) {
+    final emergency = card.emergency && primary;
+    return Card(
+      shape: RoundedRectangleBorder(
+          side: BorderSide(color: emergency ? const Color(0xFFDC2626) : Colors.transparent, width: 2),
+          borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            if (emergency) const Padding(padding: EdgeInsetsDirectional.only(end: 6), child: Icon(Icons.warning_amber, color: Color(0xFFDC2626))),
+            Expanded(child: Text(card.title, style: Theme.of(context).textTheme.titleMedium)),
+          ]),
+          const SizedBox(height: 6),
+          if (primary) Text(card.body) else Text(card.body.split('\n').first, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final a in card.actions)
+              if (a.startsWith('call:'))
+                CallButton(number: a.substring(5))
+              else if (a == 'report')
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.campaign),
+                  label: const Text('ثبت گزارش'),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReportScreen(state: state))),
+                )
+              else if (a == 'shelters')
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.night_shelter),
+                  label: const Text('محل‌های اسکان نزدیک'),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SheltersScreen(state: state))),
+                )
+              else if (a == 'alerts')
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.notifications_active),
+                  label: const Text('هشدارهای رسمی'),
+                  onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
+                ),
+          ]),
+          const SizedBox(height: 4),
+          Text('راهنمای تأییدشده · نسخه ${faDigits(card.version)}', style: Theme.of(context).textTheme.bodySmall),
+        ]),
+      ),
+    );
+  }
 }
