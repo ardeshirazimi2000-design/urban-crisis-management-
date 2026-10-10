@@ -130,6 +130,29 @@ class ResponderState extends ChangeNotifier {
     await sync();
   }
 
+  /// Field triage: saved on the device first and sent with an idempotency key, so a casualty recorded
+  /// offline or retried after a lost response is created exactly once.
+  Future<void> recordCasualty(Assignment a, {required String triage, String ageGroup = 'unknown', String sex = 'unknown',
+      String tagNo = '', String notes = '', GeoLocation? at}) async {
+    await queue.enqueue(kind: 'casualty.record', method: 'POST', path: '/incidents/${a.incidentId}/casualties', body: {
+      'triage': triage,
+      'age_group': ageGroup,
+      'sex': sex,
+      if (tagNo.trim().isNotEmpty) 'tag_no': tagNo.trim(),
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      if (at != null) 'location': {'lat': at.lat, 'lng': at.lng},
+    });
+    notifyListeners();
+    await sync();
+  }
+
+  /// Casualties this device recorded for an incident (sent or still queued), newest first.
+  List<QueuedOp> casualtiesFor(String incidentId) => queue.all
+      .where((o) => o.kind == 'casualty.record' && o.path == '/incidents/$incidentId/casualties')
+      .toList()
+      .reversed
+      .toList();
+
   Future<void> reportPosition(String resourceId, GeoLocation loc) async {
     await queue.enqueue(kind: 'resource.location', method: 'POST', path: '/resources/$resourceId/location',
         body: {'lat': loc.lat, 'lng': loc.lng, 'observed_at': DateTime.now().toUtc().toIso8601String()}, idempotent: false);

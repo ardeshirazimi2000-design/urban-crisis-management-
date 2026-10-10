@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "casualty.recorded.v1.json",
+  "title": "casualty.recorded v1",
+  "description": "A casualty was triaged (tag, triage, age group only; no identity).",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "casualty.recorded"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "casualty_id",
+        "incident_id",
+        "triage",
+        "status"
+      ],
+      "properties": {
+        "casualty_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "triage": {
+          "type": "string",
+          "enum": [
+            "immediate",
+            "delayed",
+            "minor",
+            "deceased"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "on_scene",
+            "transported",
+            "admitted",
+            "released",
+            "deceased"
+          ]
+        },
+        "age_group": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,7 @@ tags:
   - {name: incidents}
   - {name: resources}
   - {name: relief}
+  - {name: medical}
   - {name: alerts}
   - {name: gis}
   - {name: identity}
@@ -295,6 +296,75 @@ paths:
       parameters: [{$ref: "#/components/parameters/Id"}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/SettingsRequest"}}}}
       responses: {"200": {description: updated shelter}, "409": {$ref: "#/components/responses/Error"}}
+
+  /api/v1/hospitals:
+    get:
+      tags: [medical]
+      summary: Hospitals (map features) with reported beds, ICU, ER status, staleness, incoming and admitted patients
+      x-permission: hospital:read
+      responses: {"200": {description: hospitals + summary}}
+  /api/v1/hospitals/suggest:
+    get:
+      tags: [medical]
+      summary: Up to 5 receiving hospitals with free beds within 100 km, nearest first (ICU first for immediate)
+      x-permission: hospital:read
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number}}
+        - {name: lng, in: query, required: true, schema: {type: number}}
+        - {name: triage, in: query, schema: {type: string, enum: [immediate, delayed, minor]}}
+      responses: {"200": {description: suggestions}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/hospitals/{id}:
+    get:
+      tags: [medical]
+      summary: A hospital with its capacity log; incoming/admitted patients for its staff and casualty readers
+      x-permission: hospital:read
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: hospital}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/hospitals/{id}/capacity:
+    post:
+      tags: [medical]
+      summary: Report beds, ICU and ER status (version 0 for a first report)
+      x-permission: hospital:update (hospital org)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/CapacityRequest"}}}}
+      responses: {"409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/incidents/{id}/casualties:
+    post:
+      tags: [medical]
+      summary: Record a triaged casualty (Idempotency-Key required; responders only on incidents they are assigned to)
+      x-permission: casualty:record (incident org) or casualty:record_assigned (responder on the incident)
+      parameters: [{$ref: "#/components/parameters/Id"}, {$ref: "#/components/parameters/IdempotencyKey"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/CasualtyRequest"}}}}
+      responses: {"201": {description: recorded}, "409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+    get:
+      tags: [medical]
+      summary: Casualties of an incident with counts by triage and status
+      x-permission: casualty:read (incident org) or an assignment on the incident
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: casualties}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/casualties/{id}:
+    get:
+      tags: [medical]
+      summary: A casualty with its append-only history
+      x-permission: casualty:read / assignment / staff of the receiving hospital
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      responses: {"200": {description: casualty}, "404": {$ref: "#/components/responses/Error"}}
+  /api/v1/casualties/{id}/triage:
+    post:
+      tags: [medical]
+      summary: Re-triage (reason required)
+      x-permission: casualty:record (incident org) or casualty:record_assigned (responder on the incident)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [triage, reason, version], properties: {triage: {type: string, enum: [immediate, delayed, minor, deceased]}, reason: {type: string}, version: {type: integer}}}}}}
+      responses: {"409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
+  /api/v1/casualties/{id}/status:
+    post:
+      tags: [medical]
+      summary: Transport (to a hospital not closed; diverting only with reason), admit, release or record death; admission takes a bed
+      x-permission: casualty:record, or hospital:update at the receiving hospital (admit/release/death)
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/CasualtyStatusRequest"}}}}
+      responses: {"409": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
 
   /api/v1/resources:
     post:
@@ -698,6 +768,35 @@ components:
         accepting: {type: boolean}
         reason: {type: string}
         version: {type: integer, minimum: 0}
+    CapacityRequest:
+      type: object
+      required: [beds_available, icu_available, er_status, version]
+      properties:
+        beds_total: {type: integer, minimum: 0}
+        beds_available: {type: integer, minimum: 0}
+        icu_available: {type: integer, minimum: 0}
+        er_status: {type: string, enum: [open, limited, diverting, closed]}
+        note: {type: string, maxLength: 500}
+        version: {type: integer, minimum: 0}
+    CasualtyRequest:
+      type: object
+      required: [triage]
+      properties:
+        tag_no: {type: string, pattern: "^[A-Za-z0-9-]{1,20}$", description: number on the physical tag; generated when empty}
+        triage: {type: string, enum: [immediate, delayed, minor, deceased]}
+        age_group: {type: string, enum: [child, adult, elderly, unknown]}
+        sex: {type: string, enum: [female, male, unknown]}
+        location: {$ref: "#/components/schemas/Point"}
+        notes: {type: string, maxLength: 500}
+    CasualtyStatusRequest:
+      type: object
+      required: [status, version]
+      properties:
+        status: {type: string, enum: [transported, admitted, released, deceased]}
+        hospital_id: {type: string, format: uuid, description: required for transported}
+        transport_resource_id: {type: string, format: uuid}
+        reason: {type: string, description: required for deceased and for a diverting hospital}
+        version: {type: integer}
     AssignRequest:
       type: object
       required: [resource_id, reason]

@@ -137,10 +137,21 @@ class MissionCard extends StatelessWidget {
           Text('وضعیت: ${assignmentStatusLabels[a.status] ?? a.status}${pending ? ' (در انتظار همگام‌سازی)' : ''}'),
           Text('شرح ارجاع: ${a.reason}'),
           Text('تخصیص: ${agoFa(a.assignedAt)}', style: Theme.of(context).textTheme.bodySmall),
+          if (state.casualtiesFor(a.incidentId).isNotEmpty)
+            Text('مصدومان ثبت‌شده از این گوشی: ${state.casualtiesFor(a.incidentId).map(casualtyLine).join('، ')}'),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final next in a.nextStatuses)
               FilledButton(onPressed: () => state.setStatus(a, next), child: Text(assignmentStatusLabels[next] ?? next)),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.personal_injury),
+              label: const Text('ثبت مصدوم'),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => CasualtySheet(state: state, assignment: a),
+              ),
+            ),
             OutlinedButton.icon(
               icon: const Icon(Icons.my_location),
               label: const Text('ارسال موقعیت'),
@@ -154,4 +165,109 @@ class MissionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+const triageLabels = {'immediate': 'فوری (قرمز)', 'delayed': 'تأخیری (زرد)', 'minor': 'سرپایی (سبز)', 'deceased': 'فوت‌شده (سیاه)'};
+const triageColors = {
+  'immediate': Color(0xFFDC2626),
+  'delayed': Color(0xFFFACC15),
+  'minor': Color(0xFF16A34A),
+  'deceased': Color(0xFF111827),
+};
+
+/// "T-00012 قرمز" once sent; "در صف" while queued offline; the server's reason if it was refused.
+String casualtyLine(QueuedOp op) {
+  final triage = (triageLabels[op.body['triage']] ?? '').split(' ').first;
+  switch (op.state) {
+    case OpState.done:
+      return '${op.result?['tag_no'] ?? ''} $triage';
+    case OpState.pending:
+      return '$triage (در صف ارسال)';
+    default:
+      return '$triage (ثبت نشد: ${op.lastError ?? ''})';
+  }
+}
+
+/// Field triage form: one tap per colour, optional age group, sex, tag number and note.
+class CasualtySheet extends StatefulWidget {
+  final ResponderState state;
+  final Assignment assignment;
+  const CasualtySheet({super.key, required this.state, required this.assignment});
+
+  @override
+  State<CasualtySheet> createState() => _CasualtySheetState();
+}
+
+class _CasualtySheetState extends State<CasualtySheet> {
+  String? _triage;
+  String _age = 'unknown';
+  String _sex = 'unknown';
+  final _tag = TextEditingController();
+  final _notes = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _tag.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    final loc = await currentLocation();
+    await widget.state.recordCasualty(widget.assignment,
+        triage: _triage!, ageGroup: _age, sex: _sex, tagNo: _tag.text, notes: _notes.text, at: loc);
+    if (!mounted) return;
+    Navigator.pop(context);
+    final op = widget.state.casualtiesFor(widget.assignment.incidentId).firstOrNull;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(op == null ? 'ثبت شد' : 'مصدوم: ${casualtyLine(op)}')));
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('ثبت مصدوم — ${widget.assignment.incidentCode}', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final t in triageLabels.keys)
+              ChoiceChip(
+                label: Text(triageLabels[t]!, style: TextStyle(color: t == 'delayed' ? Colors.black : Colors.white)),
+                selected: _triage == t,
+                selectedColor: triageColors[t],
+                backgroundColor: triageColors[t]!.withOpacity(0.6),
+                onSelected: (_) => setState(() => _triage = t),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'child', label: Text('کودک')),
+              ButtonSegment(value: 'adult', label: Text('بزرگسال')),
+              ButtonSegment(value: 'elderly', label: Text('سالمند')),
+              ButtonSegment(value: 'unknown', label: Text('نامشخص')),
+            ],
+            selected: {_age},
+            onSelectionChanged: (v) => setState(() => _age = v.first),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'female', label: Text('زن')),
+              ButtonSegment(value: 'male', label: Text('مرد')),
+              ButtonSegment(value: 'unknown', label: Text('نامشخص')),
+            ],
+            selected: {_sex},
+            onSelectionChanged: (v) => setState(() => _sex = v.first),
+          ),
+          TextField(controller: _tag, textDirection: TextDirection.ltr,
+              decoration: const InputDecoration(labelText: 'شماره برچسب تریاژ (اختیاری)')),
+          TextField(controller: _notes, decoration: const InputDecoration(labelText: 'یادداشت پزشکی (اختیاری)')),
+          const SizedBox(height: 4),
+          const Text('نام و کد ملی ثبت نمی‌شود.', style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: _triage == null || _busy ? null : _save, child: Text(_busy ? 'در حال ثبت…' : 'ثبت مصدوم')),
+        ]),
+      );
 }

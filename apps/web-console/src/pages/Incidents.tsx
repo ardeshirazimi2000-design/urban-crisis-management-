@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 import { IncidentNeeds } from "./Needs";
+import { IncidentCasualties } from "./Medical";
 
 const STATUSES = ["", "draft", "open", "active", "escalated", "contained", "resolved", "closed"];
 const LEVELS = ["L0", "L1", "L2", "L3", "L4"];
@@ -190,6 +191,8 @@ export function IncidentDetailPage() {
           {can("alert:draft") && <Link className="btn small" to={`/alerts/new?incident=${id}`}>پیش‌نویس هشدار برای این حادثه</Link>}
         </Section>
       </div>
+
+      <IncidentCasualties incidentId={id} location={i.location} active={i.status !== "closed"} />
 
       <IncidentNeeds incidentId={id} ownerActive={["open", "active", "escalated", "contained"].includes(i.status)} />
 

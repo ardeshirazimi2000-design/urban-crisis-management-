@@ -94,3 +94,14 @@ textarea { width: 100%; }
 .stats b { display: block; font-size: 20px; }
 .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .inline-form input[type=number] { width: 110px; }
+.badge-immediate { background: #dc2626; color: #fff; border-color: #dc2626; }
+.badge-delayed { background: #facc15; color: #111827; border-color: #eab308; }
+.badge-minor { background: #16a34a; color: #fff; border-color: #16a34a; }
+.badge-deceased { background: #111827; color: #fff; border-color: #111827; }
+.badge-er-open { color: var(--ok); border-color: var(--ok); }
+.badge-er-limited { color: var(--warn); border-color: var(--warn); }
+.badge-er-diverting, .badge-er-closed { color: var(--danger); border-color: var(--danger); }
+.triage-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.triage-pick button { min-width: 110px; }
+.triage-pick button.on { outline: 3px solid var(--primary); }
+.nowrap { white-space: nowrap; }

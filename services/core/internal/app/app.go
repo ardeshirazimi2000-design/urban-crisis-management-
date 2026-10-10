@@ -17,6 +17,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/gis"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/incident"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/media"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/medical"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/notification"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
@@ -66,6 +67,7 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 	(&incident.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&resource.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.ResourceStaleAfter}).Routes(router)
 	(&relief.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
+	(&medical.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&alert.Module{Pool: pool, Guard: guard, RequireDistinctApprover: cfg.AlertRequireDistinctApprover,
 		MaxValidity: cfg.AlertMaxValidity}).Routes(router)
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)

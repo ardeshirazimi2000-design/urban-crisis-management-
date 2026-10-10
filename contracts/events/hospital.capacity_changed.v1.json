@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hospital.capacity_changed.v1.json",
+  "title": "hospital.capacity_changed v1",
+  "description": "A hospital's reported beds/ER status, or an automatic bed change on admission/discharge.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "hospital.capacity_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "hospital_id",
+        "cause",
+        "beds_available",
+        "icu_available",
+        "er_status"
+      ],
+      "properties": {
+        "hospital_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "report",
+            "casualty"
+          ]
+        },
+        "beds_total": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "beds_available": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "icu_available": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "er_status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "limited",
+            "diverting",
+            "closed"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -20,15 +20,28 @@ void main() {
   late String status;
   late int version;
   late ResponderState state;
+  late Map<String, String> casualties;
+  var loseResponse = false;
 
   setUp(() async {
     online = true;
+    casualties = {};
+    loseResponse = false;
     status = 'assigned';
     version = 1;
     final client = MockClient((req) async {
       if (!online) throw http.ClientException('offline');
       if (req.url.path.endsWith('/assignments/mine')) {
         return http.Response(jsonEncode({'items': [assignment(status, version)]}), 200, headers: _utf8);
+      }
+      if (req.url.path.endsWith('/casualties')) {
+        final key = req.headers['Idempotency-Key']!;
+        casualties.putIfAbsent(key, () => 'T-${(casualties.length + 1).toString().padLeft(5, '0')}');
+        if (loseResponse) {
+          loseResponse = false;
+          throw http.ClientException('connection reset');
+        }
+        return http.Response(jsonEncode({'id': 'c-$key', 'tag_no': casualties[key], 'triage': 'immediate', 'status': 'on_scene'}), 201, headers: _utf8);
       }
       if (req.url.path.endsWith('/status')) {
         final b = jsonDecode(req.body) as Map<String, dynamic>;
@@ -122,5 +135,19 @@ void main() {
     expect(st, 'en_route');
     expect(s.queue.pending, isEmpty);
     expect(codes.last, 'staff-code');
+  });
+
+  test('field triage recorded offline is sent once, even when a response is lost', () async {
+    online = false;
+    await state.recordCasualty(state.assignments.single, triage: 'immediate', ageGroup: 'elderly');
+    expect(state.casualtiesFor('i1').single.state, OpState.pending);
+    expect(casualtyLine(state.casualtiesFor('i1').single), contains('در صف'));
+
+    online = true;
+    loseResponse = true; // server creates it but the reply never arrives
+    await state.sync();
+    await state.sync();
+    expect(casualties, hasLength(1), reason: 'exactly one casualty on the server');
+    expect(casualtyLine(state.casualtiesFor('i1').single), startsWith('T-00001'));
   });
 }

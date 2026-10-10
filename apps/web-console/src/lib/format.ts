@@ -59,6 +59,10 @@ export const L: Record<string, string> = {
   // needs
   heavy_equipment: "ماشین‌آلات سنگین", shelter_space: "جای اسکان", water: "آب آشامیدنی", food: "غذا", blanket: "پتو",
   tent: "چادر", medicine: "دارو", partially_met: "تأمین ناقص", met: "تأمین‌شده",
+  // triage and casualty status
+  immediate: "فوری (قرمز)", delayed: "تأخیری (زرد)", minor: "سرپایی (سبز)", deceased: "فوت‌شده (سیاه)",
+  transported: "در حال انتقال", admitted: "بستری", released: "ترخیص",
+  child: "کودک", adult: "بزرگسال", elderly: "سالمند", female: "زن", male: "مرد",
   // roles
   CITIZEN: "شهروند", RESPONDER: "امدادگر", OPERATOR: "اپراتور", COMMANDER: "فرمانده", RESOURCE_MANAGER: "مدیر منابع",
   GIS_ANALYST: "کارشناس GIS", SECURITY_ADMIN: "مدیر امنیت",
@@ -73,6 +77,11 @@ export const tAttempt = (k: string) => ATTEMPT[k] ?? t(k);
 export const REPORT_TYPES = ["structural_damage", "building_collapse", "trapped_people", "injury", "fire", "gas_leak",
   "road_blocked", "flooding", "power_outage", "water_outage", "landslide", "hazmat", "other"];
 export const SEVERITIES = ["low", "medium", "high", "critical"];
+export const TRIAGE = ["immediate", "delayed", "minor", "deceased"];
+/** ER status words differ from generic open/closed. */
+export const ER_LABEL: Record<string, string> = {
+  open: "پذیرش", limited: "پذیرش محدود", diverting: "عدم پذیرش (ارجاع به دیگر مراکز)", closed: "بسته", unknown: "گزارش نشده",
+};
 export const NEED_CATEGORIES = ["rescue_team", "ambulance", "fire_truck", "medical_team", "heavy_equipment", "shelter_space",
   "water", "food", "blanket", "tent", "medicine", "other"];
 /** Suggested unit per need category (editable in the form). */

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "casualty.status_changed.v1.json",
+  "title": "casualty.status_changed v1",
+  "description": "Re-triage, transport, admission, release or death.",
+  "allOf": [
+    {
+      "$ref": "envelope.v1.json"
+    }
+  ],
+  "properties": {
+    "event_type": {
+      "const": "casualty.status_changed"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "casualty_id",
+        "incident_id",
+        "status",
+        "triage"
+      ],
+      "properties": {
+        "casualty_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "from": {
+          "type": "string",
+          "enum": [
+            "on_scene",
+            "transported",
+            "admitted",
+            "released",
+            "deceased"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "on_scene",
+            "transported",
+            "admitted",
+            "released",
+            "deceased"
+          ]
+        },
+        "triage": {
+          "type": "string",
+          "enum": [
+            "immediate",
+            "delayed",
+            "minor",
+            "deceased"
+          ]
+        },
+        "hospital_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      }
+    }
+  }
+}

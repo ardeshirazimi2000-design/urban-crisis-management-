@@ -35,7 +35,12 @@ const (
 	NeedFulfill        Permission = "need:fulfill"
 	ShelterRead        Permission = "shelter:read"
 	ShelterReadPublic  Permission = "shelter:read_public" // nearest open shelters with free places (citizens)
-	ShelterUpdate      Permission = "shelter:update"      // record admissions/discharges; capacity and closing need resource:manage
+	HospitalRead       Permission = "hospital:read"
+	HospitalUpdate     Permission = "hospital:update" // beds/ER status of the org's hospitals; admit/release patients there
+	CasualtyRead       Permission = "casualty:read"
+	CasualtyRecord     Permission = "casualty:record"          // triage and transport within the incident's organisation
+	CasualtyRecordAsgn Permission = "casualty:record_assigned" // the same, only on incidents the responder has an active mission for
+	ShelterUpdate      Permission = "shelter:update"           // record admissions/discharges; capacity and closing need resource:manage
 	AlertReadPublic    Permission = "alert:read_public"
 	AlertDraft         Permission = "alert:draft"
 	AlertApprove       Permission = "alert:approve"
@@ -62,17 +67,19 @@ const (
 
 // RolePermissions is the authoritative mapping. COMMANDER deliberately cannot manage users, roles or keys.
 var RolePermissions = map[Role][]Permission{
-	RoleCitizen:   {ReportCreate, ReportReadOwn, AlertReadPublic, ShelterReadPublic},
-	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead, ShelterReadPublic},
+	RoleCitizen: {ReportCreate, ReportReadOwn, AlertReadPublic, ShelterReadPublic},
+	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead, ShelterReadPublic,
+		HospitalRead, CasualtyRecordAsgn},
 	RoleOperator: {ReportIntake, ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
 		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic,
-		NeedRead, NeedCreate, ShelterRead, ShelterUpdate},
+		NeedRead, NeedCreate, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, CasualtyRead, CasualtyRecord},
 	RoleCommander: {ReportIntake, ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
 		IncidentApprove, IncidentLinkReport, GISRead, ResourceRead, ResourceAllocate, AlertDraft, AlertApprove,
-		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic, NeedRead, NeedCreate, NeedFulfill, ShelterRead},
+		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic, NeedRead, NeedCreate, NeedFulfill, ShelterRead,
+		HospitalRead, CasualtyRead, CasualtyRecord},
 	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic,
-		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate},
-	RoleGISAnalyst:    {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic, NeedRead, ShelterRead},
+		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate},
+	RoleGISAnalyst:    {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic, NeedRead, ShelterRead, HospitalRead},
 	RoleSecurityAdmin: {UserManage, RoleManage, AuditRead, EventReplay},
 }
 

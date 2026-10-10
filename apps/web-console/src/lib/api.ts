@@ -169,3 +169,15 @@ export type ShelterLog = {
   kind: string; admitted: number; discharged: number; occupancy_after: number; capacity_after: number | null;
   accepting_after: boolean; note: string; actor_name: string; created_at: string;
 };
+
+export type Hospital = {
+  id: string; name: string; organization_id: string | null; location: { lat: number; lng: number }; reported: boolean;
+  beds_total: number | null; beds_available: number; icu_available: number; er_status: string; note: string;
+  updated_at: string | null; stale: boolean; incoming: number; admitted: number; version: number; distance_m?: number;
+};
+export type Casualty = {
+  id: string; tag_no: string; incident_id: string; incident_code: string; triage: string; status: string; age_group: string;
+  sex: string; location: { lat: number; lng: number } | null; hospital_id: string | null; hospital_name: string | null;
+  transport_resource_id: string | null; transport_resource_name: string | null; notes: string; created_at: string;
+  updated_at: string; version: number;
+};

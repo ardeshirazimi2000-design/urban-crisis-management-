@@ -76,3 +76,14 @@ FROM (VALUES
   ('b0000000-0000-0000-0000-000000000108','municipality','shelter','سالن ورزشی نمونه سنندج (اسکان)',35.2990,47.0120,'{"indoor":true}',600,'0')
 ) AS v(id, org, type, name, lat, lng, caps, cap, age)
 ON CONFLICT (id) DO NOTHING;
+
+-- Sample hospital capacity reports (fictional). Reported once at seed time, so they turn "stale" after
+-- 6 hours until a coordinator reports again — exactly how the console must show unrefreshed numbers.
+INSERT INTO hospital_capacity (feature_id, beds_total, beds_available, icu_available, er_status, note)
+VALUES
+  ('a0000000-0000-0000-0000-000000000001', 300, 42, 6, 'open', 'نمونه'),
+  ('a0000000-0000-0000-0000-000000000002', 220, 15, 2, 'limited', 'نمونه'),
+  ('a0000000-0000-0000-0000-000000000003', 180, 0, 0, 'diverting', 'نمونه'),
+  ('a0000000-0000-0000-0000-000000000101', 250, 30, 4, 'open', 'نمونه'),
+  ('a0000000-0000-0000-0000-000000000102', 160, 12, 1, 'open', 'نمونه')
+ON CONFLICT (feature_id) DO NOTHING;

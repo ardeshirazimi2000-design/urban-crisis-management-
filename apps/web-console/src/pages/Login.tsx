@@ -12,6 +12,7 @@ const PRESETS = [
   { subject: "resources", name: "مدیر منابع", grants: [{ role: "RESOURCE_MANAGER" }] },
   { subject: "gis", name: "کارشناس GIS", grants: [{ role: "GIS_ANALYST" }] },
   { subject: "fire-operator", name: "اپراتور آتش‌نشانی", grants: [{ role: "OPERATOR", org_code: "fire" }] },
+  { subject: "ems-coordinator", name: "هماهنگ‌کننده درمان اورژانس", grants: [{ role: "OPERATOR", org_code: "ems" }] },
   { subject: "shelter-staff", name: "مسئول اسکان هلال‌احمر", grants: [{ role: "OPERATOR", org_code: "redcrescent" }] },
   { subject: "security", name: "مدیر امنیت", grants: [{ role: "SECURITY_ADMIN" }] },
 ];
