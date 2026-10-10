@@ -263,6 +263,15 @@ paths:
       summary: Shelters with capacity, occupancy and free places, plus totals
       x-permission: shelter:read
       responses: {"200": {description: shelters, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/Shelter"}}, summary: {type: object}}}}}}}
+  /api/v1/shelters/public:
+    get:
+      tags: [relief]
+      summary: Up to 5 nearest shelters (50 km) that are accepting, in service and not full; position is not stored or logged
+      x-permission: shelter:read_public
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number}}
+        - {name: lng, in: query, required: true, schema: {type: number}}
+      responses: {"200": {description: shelters, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: "#/components/schemas/PublicShelter"}}, radius_m: {type: integer}, note: {type: string}}}}}}, "422": {$ref: "#/components/responses/Error"}}
   /api/v1/shelters/{id}:
     get:
       tags: [relief]
@@ -662,6 +671,17 @@ components:
         open: {type: boolean, description: "accepting, in service and not full"}
         full: {type: boolean}
         version: {type: integer}
+    PublicShelter:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        organization: {type: string}
+        location: {$ref: "#/components/schemas/Point"}
+        distance_m: {type: number}
+        available: {type: integer}
+        capacity: {type: integer}
+        updated_at: {type: [string, "null"], format: date-time}
     MovementRequest:
       type: object
       required: [version]

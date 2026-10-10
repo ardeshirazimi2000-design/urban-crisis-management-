@@ -150,3 +150,39 @@ const assignmentStatusLabels = <String, String>{
   'proposed': 'پیشنهادی', 'assigned': 'تخصیص‌یافته', 'acknowledged': 'دریافت شد', 'en_route': 'در مسیر',
   'on_scene': 'در محل', 'completed': 'تکمیل', 'cancelled': 'لغو',
 };
+
+/// A shelter that could take people when the list was fetched (counts are not a reservation).
+class PublicShelter {
+  final String id;
+  final String name;
+  final String organization;
+  final double lat;
+  final double lng;
+  final double distanceM;
+  final int available;
+  final int capacity;
+  final DateTime? updatedAt;
+
+  const PublicShelter(this.id, this.name, this.organization, this.lat, this.lng, this.distanceM, this.available,
+      this.capacity, this.updatedAt);
+
+  factory PublicShelter.fromJson(Map<String, dynamic> j) {
+    final loc = (j['location'] as Map).cast<String, dynamic>();
+    return PublicShelter(
+      j['id'] as String,
+      j['name'] as String,
+      j['organization'] as String? ?? '',
+      (loc['lat'] as num).toDouble(),
+      (loc['lng'] as num).toDouble(),
+      (j['distance_m'] as num).toDouble(),
+      j['available'] as int,
+      j['capacity'] as int,
+      j['updated_at'] == null ? null : DateTime.parse(j['updated_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id, 'name': name, 'organization': organization, 'location': {'lat': lat, 'lng': lng},
+        'distance_m': distanceM, 'available': available, 'capacity': capacity, 'updated_at': updatedAt?.toIso8601String(),
+      };
+}

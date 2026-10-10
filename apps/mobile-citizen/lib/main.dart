@@ -15,6 +15,7 @@ Future<void> main() async {
     api: api,
     queue: OfflineQueue(await openStore('report_queue'), api),
     alertCache: await openStore('alert_cache'),
+    shelterCache: await openStore('shelter_cache'),
     readToken: SecureTokens.read,
     writeToken: SecureTokens.write,
     readPref: SecureTokens.readPref,

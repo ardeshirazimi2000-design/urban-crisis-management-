@@ -83,6 +83,44 @@ void main() {
     expect(subjects.toSet(), hasLength(1), reason: 'same citizen identity across attempts');
   });
 
+  test('nearby shelters are fetched, cached encrypted, and kept visible when offline', () async {
+    var online = true;
+    final client = MockClient((req) async {
+      if (!online) throw http.ClientException('offline');
+      if (req.url.path.endsWith('/shelters/public')) {
+        expect(req.url.queryParameters['lat'], '35.7');
+        return http.Response(jsonEncode({'items': [
+          {'id': 's1', 'name': 'سالن ورزشی', 'organization': 'شهرداری', 'location': {'lat': 35.71, 'lng': 51.41},
+            'distance_m': 1500.0, 'available': 550, 'capacity': 900, 'updated_at': '2026-10-10T10:00:00Z'},
+        ]}), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+      }
+      return http.Response('{}', 404);
+    });
+    final api = ApiClient(Uri.parse('http://x/api/v1'), () async => 't', client: client);
+    final key = StaticKeyProvider(List.filled(32, 7));
+    final bytes = MemoryByteStore();
+    CitizenState mk() => CitizenState(api: api, queue: OfflineQueue(EncryptedJsonStore(MemoryByteStore(), key), api),
+        alertCache: EncryptedJsonStore(MemoryByteStore(), key), shelterCache: EncryptedJsonStore(bytes, key),
+        readToken: () async => 't', writeToken: (_) async {});
+    final s = mk();
+    const here = GeoLocation(lat: 35.7, lng: 51.4, accuracyM: 20);
+    await s.refreshShelters(here);
+    expect(s.shelters.single.available, 550);
+    expect(s.shelterError, isNull);
+
+    online = false;
+    await s.refreshShelters(here);
+    expect(s.shelters, hasLength(1), reason: 'last list stays visible offline');
+    expect(s.shelterError, contains('اتصال'));
+
+    final restarted = mk(); // app restart while offline: list comes from the encrypted cache
+    await restarted.queue.load();
+    await restarted.start();
+    expect(restarted.shelters.single.name, 'سالن ورزشی');
+    expect(restarted.sheltersFetchedAt, isNotNull);
+    restarted.dispose();
+  });
+
   test('expired cached alerts are not shown', () {
     final s = build(online: true);
     s.alerts = [

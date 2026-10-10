@@ -164,3 +164,39 @@ func TestShelterCapacity(t *testing.T) {
 	}
 	op.do("GET", "/shelters/"+uuid.NewString(), nil, nil, nil, 404)
 }
+
+// Citizens see only shelters that can take people now, nearest first.
+func TestPublicShelters(t *testing.T) {
+	rm := login(t, grant{Role: "RESOURCE_MANAGER"})
+	citizen := login(t)
+	gisUser := login(t, grant{Role: "GIS_ANALYST"})
+	mk := func(name string, lat float64, capacity int) string {
+		var res struct {
+			ID uuid.UUID `json:"id"`
+		}
+		rm.do("POST", "/resources", map[string]any{"organization_id": orgID(t, "municipality"), "type": "shelter",
+			"name": name, "capacity": capacity, "location": map[string]any{"lat": lat, "lng": 53.1}}, nil, &res, 201)
+		return res.ID.String()
+	}
+	near := mk("نزدیک", 36.201, 100)
+	far := mk("دورتر", 36.25, 100)
+	full := mk("پر", 36.202, 2)
+	closed := mk("بسته", 36.203, 50)
+	rm.do("POST", "/shelters/"+full+"/occupancy", map[string]any{"admitted": 2, "version": 0}, nil, nil, 200)
+	rm.do("POST", "/shelters/"+closed+"/settings", map[string]any{"accepting": false, "reason": "تعمیر", "version": 0}, nil, nil, 200)
+
+	gisUser.do("GET", "/shelters/public?lat=36.2&lng=53.1", nil, nil, nil, 403)
+	citizen.do("GET", "/shelters/public?lat=abc&lng=53.1", nil, nil, nil, 422)
+	citizen.do("GET", "/shelters", nil, nil, nil, 403) // internal view is not for citizens
+	var out struct {
+		Items []struct {
+			ID        string  `json:"id"`
+			Available int     `json:"available"`
+			DistanceM float64 `json:"distance_m"`
+		} `json:"items"`
+	}
+	citizen.do("GET", "/shelters/public?lat=36.2&lng=53.1", nil, nil, &out, 200)
+	if len(out.Items) != 2 || out.Items[0].ID != near || out.Items[1].ID != far || out.Items[0].Available != 100 {
+		t.Fatalf("public shelters: %+v", out.Items)
+	}
+}

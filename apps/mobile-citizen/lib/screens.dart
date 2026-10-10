@@ -1,5 +1,6 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'platform.dart';
 import 'state.dart';
@@ -59,6 +60,12 @@ class HomeScreen extends StatelessWidget {
                 OutlinedButton(
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MyReportsScreen(state: state))),
                   child: const Text('گزارش‌های من'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.night_shelter),
+                  label: const Text('محل‌های اسکان اضطراری نزدیک'),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SheltersScreen(state: state))),
                 ),
               ]),
             ),
@@ -276,6 +283,99 @@ class MyReportsScreen extends StatelessWidget {
                 ),
               if (local.isEmpty && state.myReports.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('گزارشی ثبت نکرده‌اید.')),
             ]),
+          );
+        },
+      );
+}
+
+/// Nearest shelters that can take people now. Uses the current position once; shows the cached list offline.
+class SheltersScreen extends StatefulWidget {
+  final CitizenState state;
+  const SheltersScreen({super.key, required this.state});
+
+  @override
+  State<SheltersScreen> createState() => _SheltersScreenState();
+}
+
+class _SheltersScreenState extends State<SheltersScreen> {
+  bool _locating = false;
+  String? _locationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
+    final loc = await currentLocation();
+    if (!mounted) return;
+    if (loc == null) {
+      setState(() {
+        _locating = false;
+        _locationError = 'موقعیت شما در دسترس نیست. مکان‌یابی گوشی را روشن کنید و اجازه دسترسی بدهید.';
+      });
+      return;
+    }
+    widget.state.lastLocation = loc;
+    await widget.state.refreshShelters(loc);
+    if (mounted) setState(() => _locating = false);
+  }
+
+  String _distance(double m) => m < 1000 ? '${faDigits(m.round())} متر' : '${faDigits((m / 1000).toStringAsFixed(1))} کیلومتر';
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: widget.state,
+        builder: (context, _) {
+          final s = widget.state;
+          return Scaffold(
+            appBar: AppBar(title: const Text('محل‌های اسکان نزدیک'), actions: [
+              IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(Icons.my_location), onPressed: _locating ? null : _refresh),
+            ]),
+            body: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(padding: const EdgeInsets.all(16), children: [
+                if (_locating) const LinearProgressIndicator(),
+                if (_locationError != null) Card(color: const Color(0xFFFFF4DC), child: ListTile(title: Text(_locationError!))),
+                if (s.shelterError != null) Card(color: const Color(0xFFFFF4DC), child: ListTile(title: Text(s.shelterError!))),
+                if (s.sheltersFetchedAt != null)
+                  Text('آخرین به‌روزرسانی: ${agoFa(s.sheltersFetchedAt!)}', style: Theme.of(context).textTheme.bodySmall),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('فقط محل‌هایی که الان پذیرش دارند نمایش داده می‌شوند. جای خالی لحظه‌ای است و تضمین نمی‌شود؛ '
+                      'در صورت امکان پیش از حرکت با ۱۱۲ هماهنگ کنید.'),
+                ),
+                if (!_locating && s.sheltersFetchedAt != null && s.shelters.isEmpty)
+                  const Card(child: ListTile(title: Text('در شعاع ۵۰ کیلومتری محل اسکانِ دارای جای خالی ثبت نشده است.'),
+                      subtitle: Text('با ۱۱۲ تماس بگیرید.'))),
+                for (final sh in s.shelters)
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.night_shelter, color: Color(0xFF15803D)),
+                      title: Text(sh.name),
+                      subtitle: Text('${sh.organization}\nفاصله: ${_distance(sh.distanceM)} · جای خالی: ${faDigits(sh.available)} نفر'
+                          '${sh.updatedAt == null ? '' : '\nآمار: ${agoFa(sh.updatedAt!)}'}'),
+                      isThreeLine: true,
+                      trailing: IconButton(
+                        tooltip: 'کپی مختصات برای مسیریابی',
+                        icon: const Icon(Icons.copy),
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: '${sh.lat.toStringAsFixed(6)},${sh.lng.toStringAsFixed(6)}'));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('مختصات کپی شد؛ در برنامه نقشه جست‌وجو کنید.')));
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
           );
         },
       );

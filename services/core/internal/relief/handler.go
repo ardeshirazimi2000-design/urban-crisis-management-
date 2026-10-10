@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ func (m *Module) Routes(r *httpx.Router) {
 	r.Auth("POST /needs/{id}/fulfillments", m.fulfill)
 	r.Auth("POST /needs/{id}/cancel", m.cancelNeed)
 	r.Auth("GET /shelters", m.listShelters)
+	r.Auth("GET /shelters/public", m.publicShelters)
 	r.Auth("GET /shelters/{id}", m.getShelter)
 	r.Auth("POST /shelters/{id}/occupancy", m.movement)
 	r.Auth("POST /shelters/{id}/settings", m.settings)
@@ -515,6 +517,62 @@ func (m *Module) listShelters(w http.ResponseWriter, r *http.Request) error {
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"items": items, "summary": map[string]int{
 		"shelters": len(items), "open": open, "capacity": capacity, "occupancy": occupancy, "available_in_open": available}})
+	return nil
+}
+
+// PublicShelter is what citizens see: only shelters that can take people now, nearest first. Counts are
+// aggregate (no personal data); the caller's position is used for the query only and never stored or logged.
+type PublicShelter struct {
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	Organization string     `json:"organization"`
+	Location     gis.Point  `json:"location"`
+	DistanceM    float64    `json:"distance_m"`
+	Available    int        `json:"available"`
+	Capacity     int        `json:"capacity"`
+	UpdatedAt    *time.Time `json:"updated_at"`
+}
+
+const publicShelterRadiusM = 50_000
+
+func (m *Module) publicShelters(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	if err := m.Guard.Require(ctx, auth.ShelterReadPublic, "shelter", ""); err != nil {
+		return err
+	}
+	q := r.URL.Query()
+	lat, e1 := strconv.ParseFloat(q.Get("lat"), 64)
+	lng, e2 := strconv.ParseFloat(q.Get("lng"), 64)
+	if e1 != nil || e2 != nil || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		return httpx.Validation(httpx.FieldDetail{Field: "lat,lng", Reason: "invalid"})
+	}
+	rows, err := m.Pool.Query(ctx, `SELECT r.id, r.name, o.name, ST_Y(r.location::geometry), ST_X(r.location::geometry),
+		ST_Distance(r.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography),
+		r.capacity - COALESCE(s.occupancy, 0), r.capacity, s.updated_at
+		FROM resources r JOIN organizations o ON o.id = r.organization_id
+		LEFT JOIN shelter_occupancy s ON s.resource_id = r.id
+		WHERE r.type = 'shelter' AND r.status <> 'out_of_service' AND r.location IS NOT NULL AND r.capacity IS NOT NULL
+		  AND COALESCE(s.accepting, true) AND r.capacity > COALESCE(s.occupancy, 0)
+		  AND ST_DWithin(r.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+		ORDER BY 6 LIMIT 5`, lng, lat, publicShelterRadiusM)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	items := []PublicShelter{}
+	for rows.Next() {
+		var s PublicShelter
+		if err := rows.Scan(&s.ID, &s.Name, &s.Organization, &s.Location.Lat, &s.Location.Lng, &s.DistanceM,
+			&s.Available, &s.Capacity, &s.UpdatedAt); err != nil {
+			return err
+		}
+		items = append(items, s)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": items, "radius_m": publicShelterRadiusM,
+		"note": "جای خالی لحظه‌ای است و تضمین نمی‌شود؛ پیش از حرکت در صورت امکان با ۱۱۲ یا محل اسکان هماهنگ کنید."})
 	return nil
 }
 

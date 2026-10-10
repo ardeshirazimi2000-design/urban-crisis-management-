@@ -79,6 +79,12 @@ class ApiClient {
     return (d['items'] as List).map((e) => PublicAlert.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Nearest shelters (up to 5, within 50 km) that are accepting people now.
+  Future<List<PublicShelter>> nearbyShelters(double lat, double lng) async {
+    final d = await request('GET', '/shelters/public', query: {'lat': '$lat', 'lng': '$lng'}) as Map<String, dynamic>;
+    return (d['items'] as List).map((e) => PublicShelter.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<Assignment>> myAssignments() async {
     final d = await request('GET', '/assignments/mine') as Map<String, dynamic>;
     return (d['items'] as List).map((e) => Assignment.fromJson(e as Map<String, dynamic>)).toList();

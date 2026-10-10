@@ -34,7 +34,8 @@ const (
 	NeedCreate         Permission = "need:create" // register (and cancel, with reason) an open need for an incident
 	NeedFulfill        Permission = "need:fulfill"
 	ShelterRead        Permission = "shelter:read"
-	ShelterUpdate      Permission = "shelter:update" // record admissions/discharges; capacity and closing need resource:manage
+	ShelterReadPublic  Permission = "shelter:read_public" // nearest open shelters with free places (citizens)
+	ShelterUpdate      Permission = "shelter:update"      // record admissions/discharges; capacity and closing need resource:manage
 	AlertReadPublic    Permission = "alert:read_public"
 	AlertDraft         Permission = "alert:draft"
 	AlertApprove       Permission = "alert:approve"
@@ -61,8 +62,8 @@ const (
 
 // RolePermissions is the authoritative mapping. COMMANDER deliberately cannot manage users, roles or keys.
 var RolePermissions = map[Role][]Permission{
-	RoleCitizen:   {ReportCreate, ReportReadOwn, AlertReadPublic},
-	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead},
+	RoleCitizen:   {ReportCreate, ReportReadOwn, AlertReadPublic, ShelterReadPublic},
+	RoleResponder: {ReportCreate, IncidentReadAssign, AssignmentUpdate, AlertReadPublic, GISRead, ShelterReadPublic},
 	RoleOperator: {ReportIntake, ReportRead, ReportReadPrecise, ReportReview, MediaRead, IncidentCreate, IncidentRead,
 		IncidentTransition, IncidentLinkReport, GISRead, ResourceRead, AlertDraft, AlertReadDelivery, AlertReadPublic,
 		NeedRead, NeedCreate, ShelterRead, ShelterUpdate},

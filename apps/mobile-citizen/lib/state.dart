@@ -11,6 +11,9 @@ class CitizenState extends ChangeNotifier {
   final ApiClient api;
   final OfflineQueue queue;
   final EncryptedJsonStore alertCache;
+
+  /// Last nearby-shelter list, kept encrypted so it can still be shown (with its age) when offline.
+  final EncryptedJsonStore? shelterCache;
   final Future<String?> Function() readToken;
   final Future<void> Function(String?) writeToken;
   final bool devAuth;
@@ -30,10 +33,13 @@ class CitizenState extends ChangeNotifier {
   bool offline = false;
   String? lastError;
   GeoLocation? lastLocation;
+  List<PublicShelter> shelters = [];
+  DateTime? sheltersFetchedAt;
+  String? shelterError;
   Timer? _timer;
   StreamSubscription<List<QueuedOp>>? _sub;
 
-  CitizenState({required this.api, required this.queue, required this.alertCache, required this.readToken,
+  CitizenState({required this.api, required this.queue, required this.alertCache, this.shelterCache, required this.readToken,
       required this.writeToken, this.devAuth = true, Future<String?> Function(String)? readPref,
       Future<void> Function(String, String?)? writePref})
       : readPref = readPref ?? _noPref,
@@ -49,6 +55,11 @@ class CitizenState extends ChangeNotifier {
     if (cached != null) {
       alerts = (cached['items'] as List).map((e) => PublicAlert.fromJson((e as Map).cast())).toList();
       alertsFetchedAt = DateTime.tryParse(cached['fetched_at'] as String? ?? '');
+    }
+    final sc = await shelterCache?.read() as Map<String, dynamic>?;
+    if (sc != null) {
+      shelters = (sc['items'] as List).map((e) => PublicShelter.fromJson((e as Map).cast())).toList();
+      sheltersFetchedAt = DateTime.tryParse(sc['fetched_at'] as String? ?? '');
     }
     await ensureIdentity();
     await sync();
@@ -126,6 +137,20 @@ class CitizenState extends ChangeNotifier {
     } on ApiException catch (e) {
       offline = e.isNetwork;
       lastError = e.message;
+    }
+    notifyListeners();
+  }
+
+  /// Nearest shelters accepting people. On failure the previous list stays visible with its fetch time.
+  Future<void> refreshShelters(GeoLocation at) async {
+    try {
+      shelters = await api.nearbyShelters(at.lat, at.lng);
+      sheltersFetchedAt = DateTime.now();
+      shelterError = null;
+      await shelterCache?.write({'items': shelters.map((s) => s.toJson()).toList(), 'fetched_at': sheltersFetchedAt!.toIso8601String()});
+    } on ApiException catch (e) {
+      offline = e.isNetwork;
+      shelterError = e.isNetwork ? 'اتصال برقرار نیست؛ آخرین فهرست ذخیره‌شده نمایش داده می‌شود.' : describeApiError(e);
     }
     notifyListeners();
   }
