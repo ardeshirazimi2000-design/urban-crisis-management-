@@ -37,6 +37,11 @@ export function AlertsPage() {
   );
 }
 
+/** Template parameter names (API keys) shown in Persian. */
+const PARAM_LABEL: Record<string, string> = {
+  instructions: "دستورالعمل برای مردم", shelter: "نام و نشانی محل اسکان", road: "نام مسیر",
+};
+
 export function NewAlertPage() {
   const { orgs, me } = useSession();
   const [sp] = useSearchParams();
@@ -76,7 +81,7 @@ export function NewAlertPage() {
         <label>قالب<select value={f.template} onChange={(e) => { setF({ ...f, template: e.target.value }); setParams({}); }}>
           {templates.data?.items.map((x) => <option key={`${x.code}:${x.version}`} value={`${x.code}:${x.version}`}>{x.title} (نسخه {x.version})</option>)}</select></label>
         {tpl?.params?.map((p) => (
-          <label key={p}>{p}<input value={params[p] ?? ""} onChange={(e) => setParams({ ...params, [p]: e.target.value })} required maxLength={300} /></label>
+          <label key={p}>{PARAM_LABEL[p] ?? p}<input value={params[p] ?? ""} onChange={(e) => setParams({ ...params, [p]: e.target.value })} required maxLength={300} /></label>
         ))}
         <label>نام محدوده<input value={f.region_label} onChange={(e) => setF({ ...f, region_label: e.target.value })} required maxLength={120} /></label>
         <label>مرکز (عرض)<input value={f.lat} onChange={(e) => setF({ ...f, lat: e.target.value })} dir="ltr" /></label>
