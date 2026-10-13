@@ -7,12 +7,13 @@ import 'platform.dart';
 import 'screens.dart';
 import 'state.dart';
 
-const devAuth = bool.fromEnvironment('DEV_AUTH', defaultValue: true);
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final api = ApiClient(Uri.parse(apiBaseUrl), SecureTokens.read);
+  late final SessionAuth? auth;
+  final api = ApiClient(Uri.parse(apiBaseUrl), () => auth?.accessToken() ?? SecureTokens.read());
+  auth = devAuth ? null : SessionAuth(api, SecureCredentialStore());
   final state = CitizenState(
+    auth: auth,
     api: api,
     queue: OfflineQueue(await openStore('report_queue'), api),
     alertCache: await openStore('alert_cache'),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'platform.dart';
+import 'sign_in.dart';
 import 'state.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -18,6 +19,8 @@ class HomeScreen extends StatelessWidget {
           return Scaffold(
             appBar: AppBar(title: const Text('گزارش و هشدار بحران'), actions: [
               IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(Icons.sync), onPressed: state.sync),
+              if (state.auth != null && !state.needsSignIn)
+                IconButton(tooltip: 'خروج', icon: const Icon(Icons.logout), onPressed: state.signOut),
             ]),
             body: RefreshIndicator(
               onRefresh: state.sync,
@@ -31,6 +34,8 @@ class HomeScreen extends StatelessWidget {
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AssistantScreen(state: state))),
                 ),
                 if (state.needsAccessCode) AccessCodeCard(state: state),
+                if (state.needsSignIn) SignInCard(state: state),
+                AccessHistoryCard(state: state),
                 if (state.offline)
                   const Card(
                     color: Color(0xFFFFF4DC),

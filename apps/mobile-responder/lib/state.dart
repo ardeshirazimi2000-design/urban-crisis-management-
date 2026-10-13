@@ -19,6 +19,12 @@ class ResponderState extends ChangeNotifier {
   final Future<void> Function(String key, String? value) writePref;
   late final OfflineQueue queue;
 
+  /// Built-in sign-in (Shahkar on first sign-in / new device, SMS code every time); null with dev sign-in.
+  final SessionAuth? auth;
+
+  /// Shown once after signing in.
+  AccessHistory? lastAccess;
+
   List<Assignment> _server = [];
   DateTime? fetchedAt;
   bool offline = false;
@@ -26,7 +32,7 @@ class ResponderState extends ChangeNotifier {
   Timer? _timer;
 
   ResponderState({required this.api, required EncryptedJsonStore queueStore, required this.cache,
-      required this.readToken, required this.writeToken, Future<String?> Function(String)? readPref,
+      required this.readToken, required this.writeToken, this.auth, Future<String?> Function(String)? readPref,
       Future<void> Function(String, String?)? writePref})
       : readPref = readPref ?? _noPref,
         writePref = writePref ?? _noWrite {
@@ -44,7 +50,7 @@ class ResponderState extends ChangeNotifier {
       _server = (c['items'] as List).map((e) => Assignment.fromJson((e as Map).cast())).toList();
       fetchedAt = DateTime.tryParse(c['fetched_at'] as String? ?? '');
     }
-    signedIn = await readToken() != null;
+    signedIn = auth != null ? await auth!.signedIn : await readToken() != null;
     notifyListeners();
     if (signedIn) await sync();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => signedIn ? sync() : null);
@@ -64,7 +70,19 @@ class ResponderState extends ChangeNotifier {
   Future<(String?, String?, String?)> savedSignIn() async =>
       (await readPref('subject'), await readPref('name'), await readPref('access_code'));
 
+  /// Step 1 of the built-in sign-in. Responder accounts are created by the security administrator; an unknown
+  /// national code is refused here instead of registering a citizen.
+  Future<AuthChallenge> startSignIn(String nationalCode, String mobile) => auth!.start(nationalCode, mobile);
+
+  Future<void> completeSignIn(AuthChallenge c, String code) async {
+    lastAccess = await auth!.verify(c, code, deviceName: 'responder-app');
+    signedIn = true;
+    notifyListeners();
+    await sync();
+  }
+
   Future<bool> _reauthenticate() async {
+    if (auth != null) return auth!.refresh();
     final subject = await readPref('subject');
     if (subject == null) return false;
     try {
@@ -77,6 +95,7 @@ class ResponderState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await auth?.signOut();
     await writeToken(null);
     await writePref('access_code', null);
     signedIn = false;
@@ -94,7 +113,7 @@ class ResponderState extends ChangeNotifier {
       offline = false;
     } on ApiException catch (e) {
       offline = e.isNetwork;
-      if (e.isUnauthenticated) signedIn = false;
+      if (e.isUnauthenticated) signedIn = auth != null && await auth!.signedIn;
     }
     notifyListeners();
   }

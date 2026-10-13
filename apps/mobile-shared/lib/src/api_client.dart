@@ -37,14 +37,29 @@ class ApiClient {
   final http.Client _http;
   final Duration timeout;
 
+  /// Renews an expired access token (built-in sign-in); the failed request is retried once when it succeeds.
+  Future<bool> Function()? refresh;
+
   ApiClient(this.baseUrl, this.token, {http.Client? client, this.timeout = const Duration(seconds: 15)})
       : _http = client ?? http.Client();
 
   Future<dynamic> request(String method, String path,
-      {Object? body, String? idempotencyKey, Map<String, String>? query}) async {
+      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true}) async {
+    try {
+      return await _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth);
+    } on ApiException catch (e) {
+      if (e.code == 'UNAUTHENTICATED' && auth && refresh != null && !path.startsWith('/auth/') && await refresh!()) {
+        return _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth);
+      }
+      rethrow;
+    }
+  }
+
+  Future<dynamic> _send(String method, String path,
+      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true}) async {
     final uri = baseUrl.replace(path: '${baseUrl.path}$path', queryParameters: query);
     final headers = <String, String>{'X-Correlation-ID': _uuid.v4(), 'Accept': 'application/json'};
-    final t = await token();
+    final t = auth ? await token() : null;
     if (t != null) headers['Authorization'] = 'Bearer $t';
     if (body != null) headers['Content-Type'] = 'application/json';
     if (idempotencyKey != null) headers['Idempotency-Key'] = idempotencyKey;

@@ -4,12 +4,16 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'platform.dart';
 import 'screens.dart';
+import 'sign_in.dart';
 import 'state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final api = ApiClient(Uri.parse(apiBaseUrl), SecureTokens.read);
+  late final SessionAuth? auth;
+  final api = ApiClient(Uri.parse(apiBaseUrl), () => auth?.accessToken() ?? SecureTokens.read());
+  auth = devAuth ? null : SessionAuth(api, SecureCredentialStore());
   final state = ResponderState(
+    auth: auth,
     api: api,
     queueStore: await openStore('responder_queue'),
     cache: await openStore('assignment_cache'),
@@ -36,7 +40,11 @@ class ResponderApp extends StatelessWidget {
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         home: ListenableBuilder(
           listenable: state,
-          builder: (_, __) => state.signedIn ? MissionsScreen(state: state) : SignInScreen(state: state),
+          builder: (_, __) => state.signedIn
+              ? MissionsScreen(state: state)
+              : state.auth != null
+                  ? LocalSignInScreen(state: state)
+                  : SignInScreen(state: state),
         ),
       );
 }

@@ -24,6 +24,15 @@ class CitizenState extends ChangeNotifier {
   final Future<void> Function(String?) writeToken;
   final bool devAuth;
 
+  /// Built-in sign-in (Shahkar on first sign-in / new device, SMS code every time); null with dev sign-in.
+  final SessionAuth? auth;
+
+  /// No session yet (or it ended): the sign-in card is shown.
+  bool needsSignIn = false;
+
+  /// Shown once after signing in.
+  AccessHistory? lastAccess;
+
   /// Small private values kept in the OS keystore (stable test identity, access code).
   final Future<String?> Function(String key) readPref;
   final Future<void> Function(String key, String? value) writePref;
@@ -47,7 +56,7 @@ class CitizenState extends ChangeNotifier {
 
   CitizenState({required this.api, required this.queue, required this.alertCache, this.shelterCache, this.guidanceCache,
       this.bundledGuidance, required this.readToken,
-      required this.writeToken, this.devAuth = true, Future<String?> Function(String)? readPref,
+      required this.writeToken, this.devAuth = true, this.auth, Future<String?> Function(String)? readPref,
       Future<void> Function(String, String?)? writePref})
       : readPref = readPref ?? _noPref,
         writePref = writePref ?? _noWrite;
@@ -76,6 +85,11 @@ class CitizenState extends ChangeNotifier {
   /// Development identity only. Production uses the national/municipal OIDC provider.
   /// The identity is stable per installation, so "my reports" survive an expired session.
   Future<void> ensureIdentity({bool force = false}) async {
+    if (auth != null) {
+      needsSignIn = !await auth!.signedIn;
+      notifyListeners();
+      return;
+    }
     if (!devAuth || (!force && await readToken() != null)) return;
     var subject = await readPref('citizen_subject');
     if (subject == null) {
@@ -107,13 +121,46 @@ class CitizenState extends ChangeNotifier {
     return !needsAccessCode;
   }
 
+  /// Step 1 of the built-in sign-in: Shahkar when needed, then an SMS code.
+  Future<AuthChallenge> startSignIn(String nationalCode, String mobile) => auth!.start(nationalCode, mobile);
+
+  /// Step 2: the SMS code (and the name, for a first registration).
+  Future<void> completeSignIn(AuthChallenge c, String code, {String firstName = '', String lastName = ''}) async {
+    lastAccess = await auth!.verify(c, code, firstName: firstName, lastName: lastName, deviceName: 'citizen-app');
+    needsSignIn = false;
+    notifyListeners();
+    await sync();
+  }
+
+  void dismissAccessHistory() {
+    lastAccess = null;
+    notifyListeners();
+  }
+
+  Future<void> signOut() async {
+    await auth?.signOut();
+    needsSignIn = auth != null;
+    myReports = [];
+    notifyListeners();
+  }
+
   Future<bool> _reauthenticate() async {
+    if (auth != null) {
+      final ok = await auth!.refresh();
+      needsSignIn = !await auth!.signedIn;
+      return ok;
+    }
     await writeToken(null);
     await ensureIdentity(force: true);
     return await readToken() != null;
   }
 
   Future<void> sync() async {
+    if (auth != null && await auth!.signedIn == false) {
+      needsSignIn = true;
+      notifyListeners();
+      return;
+    }
     if (devAuth && !needsAccessCode && await readToken() == null) await ensureIdentity(); // first start was offline
     var r = await queue.flush();
     if (r.needsAuth && await _reauthenticate()) r = await queue.flush();

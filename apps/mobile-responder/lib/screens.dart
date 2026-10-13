@@ -93,6 +93,17 @@ class MissionsScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: state.sync,
         child: ListView(padding: const EdgeInsets.all(12), children: [
+          if (state.lastAccess != null)
+            Card(
+              color: state.lastAccess!.failedSinceLastLogin > 0 ? const Color(0xFFFFF4DC) : null,
+              child: ListTile(
+                leading: const Icon(Icons.history),
+                title: Text(state.lastAccess!.lastLoginAt == null ? 'اولین ورود شما' : 'آخرین ورود: ${agoFa(state.lastAccess!.lastLoginAt!)}'),
+                subtitle: state.lastAccess!.failedSinceLastLogin > 0
+                    ? Text('${faDigits(state.lastAccess!.failedSinceLastLogin)} تلاش ناموفق برای ورود به حساب شما ثبت شده است.')
+                    : null,
+              ),
+            ),
           if (state.offline)
             const Card(
               color: Color(0xFFFFF4DC),

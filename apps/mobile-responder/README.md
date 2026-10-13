@@ -9,3 +9,8 @@ flutter pub get
 flutter test
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 ```
+
+**ورود:** حساب امدادگر را مدیر امنیت در کنسول تعریف می‌کند (با استعلام شاهکار و «دسترسی اپلیکیشن»). امدادگر با
+کد ملی و موبایل وارد می‌شود؛ در اولین ورود از هر گوشی شاهکار استعلام و سپس کد پیامکی ارسال می‌شود. نسخه عملیاتی:
+`flutter build apk --release --dart-define=API_BASE_URL=https://crisis.example.ir/api/v1`. برای سرور آزمایشی
+`--dart-define=DEV_AUTH=true` اضافه کنید.

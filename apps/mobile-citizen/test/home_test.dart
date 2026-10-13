@@ -166,4 +166,51 @@ void main() {
     ];
     expect(s.activeAlerts.map((a) => a.id), ['b']);
   });
+
+  testWidgets('built-in sign-in: Shahkar + SMS code, name on first registration, then the home screen', (tester) async {
+    final calls = <String>[];
+    final client = MockClient((req) async {
+      calls.add(req.url.path);
+      switch (req.url.path) {
+        case '/api/v1/auth/app/start':
+          return http.Response.bytes(utf8.encode(jsonEncode({'challenge': {'challenge_id': 'c1', 'mobile_masked': '0912***4567', 'expires_in': 120},
+            'shahkar_verified': true, 'needs_profile': true})), 200);
+        case '/api/v1/auth/app/verify':
+          final b = jsonDecode(req.body) as Map<String, dynamic>;
+          if (b['first_name'] != 'مریم') return http.Response(jsonEncode({'error': {'code': 'VALIDATION_ERROR', 'message': 'x'}}), 422);
+          return http.Response(jsonEncode({'tokens': {'access_token': 'a', 'refresh_token': 'r'}, 'device_token': 'd',
+            'access_history': {'failed_since_last_login': 0}}), 200);
+        case '/api/v1/reports/mine':
+          return http.Response(jsonEncode({'items': []}), req.headers['Authorization'] == 'Bearer a' ? 200 : 401);
+      }
+      return http.Response('{}', 404);
+    });
+    late SessionAuth auth;
+    final api = ApiClient(Uri.parse('http://x/api/v1'), () => auth.accessToken(), client: client);
+    auth = SessionAuth(api, MemoryCredentialStore());
+    final key = StaticKeyProvider(List.filled(32, 7));
+    final s = CitizenState(api: api, queue: OfflineQueue(EncryptedJsonStore(MemoryByteStore(), key), api),
+        alertCache: EncryptedJsonStore(MemoryByteStore(), key), readToken: auth.accessToken, writeToken: (_) async {},
+        devAuth: false, auth: auth);
+    await s.ensureIdentity();
+    expect(s.needsSignIn, isTrue);
+    await tester.pumpWidget(MaterialApp(home: Directionality(textDirection: TextDirection.rtl, child: HomeScreen(state: s))));
+    expect(find.text('ورود به سامانه'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'ورود'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'کد ملی'), '0010000003');
+    await tester.enterText(find.widgetWithText(TextField, 'شماره موبایل'), '09121234567');
+    await tester.tap(find.text('دریافت کد تأیید'));
+    await tester.pumpAndSettle();
+    expect(find.text('مالکیت شماره موبایل با شاهکار تأیید شد.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'کد تأیید'), '123456');
+    await tester.enterText(find.widgetWithText(TextField, 'نام'), 'مریم');
+    await tester.enterText(find.widgetWithText(TextField, 'نام خانوادگی'), 'احمدی');
+    await tester.tap(find.widgetWithText(FilledButton, 'ورود'));
+    await tester.pumpAndSettle();
+    expect(s.needsSignIn, isFalse);
+    expect(find.text('ورود به سامانه'), findsNothing);
+    expect(find.text('اولین ورود شما'), findsOneWidget);
+    expect(calls, contains('/api/v1/reports/mine'));
+  });
 }

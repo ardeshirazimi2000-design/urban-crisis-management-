@@ -37,6 +37,20 @@ class SecureTokens {
       v == null ? _storage.delete(key: 'pref.$key') : _storage.write(key: 'pref.$key', value: v);
 }
 
+/// Tokens and device identity of the built-in sign-in, in the OS keystore.
+class SecureCredentialStore implements CredentialStore {
+  static const _storage = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+  @override
+  Future<String?> read(String key) => _storage.read(key: key);
+  @override
+  Future<void> write(String key, String? value) =>
+      value == null ? _storage.delete(key: key) : _storage.write(key: key, value: value);
+}
+
+/// Built-in sign-in (Shahkar + SMS code) unless the build targets a development/test server:
+/// --dart-define=DEV_AUTH=true uses the local /dev/token endpoint instead.
+const devAuth = bool.fromEnvironment('DEV_AUTH', defaultValue: false);
+
 Future<EncryptedJsonStore> openStore(String name) async {
   final dir = await getApplicationSupportDirectory();
   return EncryptedJsonStore(FileByteStore('${dir.path}/$name.bin'), SecureKeyProvider());
