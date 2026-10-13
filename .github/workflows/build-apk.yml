@@ -1,6 +1,7 @@
 # Builds the citizen and responder APKs and attaches them to the run (Actions › this run › Artifacts).
-# Run it from the Actions tab ("Run workflow"), or push a tag such as apk-2026-10-14 to build with the
-# repository variable APK_API_BASE_URL (Settings › Secrets and variables › Actions › Variables).
+# Run it from the Actions tab ("Run workflow"), push a tag such as apk-2026-10-14, or change the apps on the AFTA
+# branch; the latter two use the repository variable APK_API_BASE_URL (Settings › Secrets and variables › Actions ›
+# Variables), defaulting to the crisis.maliyarapp.ir server.
 name: build-apk
 on:
   workflow_dispatch:
@@ -14,6 +15,8 @@ on:
         default: false
   push:
     tags: ["apk-*"]
+    branches: ["claude/afta-security-profile"]
+    paths: ["apps/mobile-*/**", ".github/workflows/build-apk.yml"]
 permissions: {contents: read}
 
 jobs:
