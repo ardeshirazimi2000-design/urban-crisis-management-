@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"net/http"
@@ -167,14 +168,92 @@ func (rl *RateLimiter) evictLocked(now time.Time) {
 	}
 }
 
-// ClientIP returns the remote IP. X-Forwarded-For is trusted only from the gateway hop.
+// TrustedProxyHops is the number of reverse proxies in front of the API that append to X-Forwarded-For
+// (0 = use the TCP peer). Only the entries those proxies added are trusted; anything a client sends is ignored.
+var TrustedProxyHops = 0
+
+// ClientIP returns the caller's IP address.
 func ClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if TrustedProxyHops <= 0 {
+		return host
+	}
+	var hops []string
+	for _, h := range r.Header.Values("X-Forwarded-For") {
+		for _, p := range strings.Split(h, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				hops = append(hops, p)
+			}
+		}
+	}
+	// The last proxy is the TCP peer; each trusted proxy appended its own peer to the header.
+	if i := len(hops) - TrustedProxyHops; i >= 0 && i < len(hops) && net.ParseIP(hops[i]) != nil {
+		return hops[i]
 	}
 	return host
+}
+
+// RequestInfo describes the caller of the current request for audit records and session binding.
+type RequestInfo struct {
+	IP        string
+	UserAgent string
+	Channel   string // console | app, once authenticated
+	Secure    bool   // arrived over TLS (directly or at the trusted proxy)
+}
+
+const requestInfoKey ctxKey = 2
+
+func WithRequestInfo(ctx context.Context, ri RequestInfo) context.Context {
+	return context.WithValue(ctx, requestInfoKey, ri)
+}
+
+func Info(ctx context.Context) RequestInfo {
+	ri, _ := ctx.Value(requestInfoKey).(RequestInfo)
+	return ri
+}
+
+// WithChannel records the authenticated channel in the request info.
+func WithChannel(ctx context.Context, channel string) context.Context {
+	ri := Info(ctx)
+	ri.Channel = channel
+	return WithRequestInfo(ctx, ri)
+}
+
+func isSecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return TrustedProxyHops > 0 && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+// ClientInfo captures the caller's address, user agent and transport for the rest of the request.
+func ClientInfo(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua := r.UserAgent()
+		if len(ua) > 300 {
+			ua = ua[:300]
+		}
+		ri := RequestInfo{IP: ClientIP(r), UserAgent: ua, Secure: isSecure(r)}
+		next.ServeHTTP(w, r.WithContext(WithRequestInfo(r.Context(), ri)))
+	})
+}
+
+// RequireHTTPS refuses API requests that did not arrive over TLS (FTP_TRP.1). Health probes stay reachable.
+func RequireHTTPS(on bool) Middleware {
+	return func(next http.Handler) http.Handler {
+		if !on {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isSecure(r) && !strings.HasPrefix(r.URL.Path, "/health/") && r.URL.Path != "/metrics" {
+				WriteError(w, r, NewError(http.StatusForbidden, "HTTPS_REQUIRED", "اتصال باید از طریق HTTPS باشد"))
+				return
+			}
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+			next.ServeHTTP(w, r)
+		})
+	}
 }

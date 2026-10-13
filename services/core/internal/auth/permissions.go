@@ -58,7 +58,17 @@ const (
 	RoleManage         Permission = "role:manage"
 	AuditRead          Permission = "audit:read"
 	EventReplay        Permission = "event:replay"
+	AuditConfigure     Permission = "audit:configure" // selectable events, capacity, archive (auditor only)
+	SettingsManage     Permission = "settings:manage" // security settings other than audit (security admin only)
+	SessionManage      Permission = "session:manage"  // view and revoke other users' sessions
+	ShahkarInquire     Permission = "shahkar:inquire" // ad-hoc Shahkar inquiries and their history
+	IntegrityCheck     Permission = "integrity:check" // run the record-integrity check
+	DataExport         Permission = "data:export"     // controlled export of operational data
 )
+
+// ConsoleOnly permissions are never effective on the mobile app channel, whatever the role.
+var ConsoleOnly = []Permission{UserManage, RoleManage, AuditRead, AuditConfigure, EventReplay, SettingsManage,
+	SessionManage, ShahkarInquire, IntegrityCheck, DataExport}
 
 type Role string
 
@@ -70,7 +80,11 @@ const (
 	RoleResourceManager Role = "RESOURCE_MANAGER"
 	RoleGISAnalyst      Role = "GIS_ANALYST"
 	RoleSecurityAdmin   Role = "SECURITY_ADMIN"
+	RoleSecurityAuditor Role = "SECURITY_AUDITOR"
 )
+
+// AppRoles may sign in to the mobile apps; every other role is console-only.
+var AppRoles = []Role{RoleCitizen, RoleResponder}
 
 // RolePermissions is the authoritative mapping. COMMANDER deliberately cannot manage users, roles or keys.
 var RolePermissions = map[Role][]Permission{
@@ -84,13 +98,16 @@ var RolePermissions = map[Role][]Permission{
 	RoleCommander: {ReportIntake, ReportRead, ReportReadPrecise, MediaRead, IncidentCreate, IncidentRead, IncidentTransition,
 		IncidentApprove, IncidentLinkReport, GISRead, ResourceRead, ResourceAllocate, AlertDraft, AlertApprove,
 		AlertDispatch, AlertCancel, AlertReadDelivery, AlertReadPublic, NeedRead, NeedCreate, NeedFulfill, ShelterRead,
-		HospitalRead, CasualtyRead, CasualtyRecord, DamageRead, SitrepRead, SitrepIssue, GuidanceEdit, GuidanceApprove},
+		HospitalRead, CasualtyRead, CasualtyRecord, DamageRead, SitrepRead, SitrepIssue, GuidanceEdit, GuidanceApprove, DataExport},
 	RoleResourceManager: {IncidentRead, GISRead, ResourceRead, ResourceManage, ResourceAllocate, AlertReadPublic,
 		NeedRead, NeedFulfill, ShelterRead, ShelterUpdate, HospitalRead, HospitalUpdate, DamageRead,
-		SitrepRead},
+		SitrepRead, DataExport},
 	RoleGISAnalyst: {ReportRead, IncidentRead, GISRead, GISManage, ResourceRead, AlertReadPublic, NeedRead, ShelterRead, HospitalRead,
 		DamageRead, DamageAssess, SitrepRead},
-	RoleSecurityAdmin: {UserManage, RoleManage, AuditRead, EventReplay},
+	// Separation of duties: the security administrator manages identities and settings but cannot read or
+	// configure the audit trail; the auditor reviews it but cannot change identities or other settings.
+	RoleSecurityAdmin:   {UserManage, RoleManage, EventReplay, SettingsManage, SessionManage, ShahkarInquire, IntegrityCheck},
+	RoleSecurityAuditor: {AuditRead, AuditConfigure, IntegrityCheck},
 }
 
 func IsKnownRole(r string) bool {
@@ -110,11 +127,19 @@ type Principal struct {
 	Subject     string    `json:"subject"`
 	DisplayName string    `json:"display_name"`
 	Grants      []Grant   `json:"grants"`
+	// Set for built-in (AUTH_MODE=local) sessions.
+	Channel                string     `json:"channel,omitempty"` // console | app
+	SessionID              *uuid.UUID `json:"session_id,omitempty"`
+	PasswordChangeRequired bool       `json:"password_change_required,omitempty"`
+}
+
+func (p *Principal) blocked(perm Permission) bool {
+	return p.Channel == "app" && slices.Contains(ConsoleOnly, perm)
 }
 
 // Has reports whether any grant (regardless of scope) carries the permission.
 func (p *Principal) Has(perm Permission) bool {
-	if p == nil {
+	if p == nil || p.blocked(perm) {
 		return false
 	}
 	for _, g := range p.Grants {
@@ -127,7 +152,7 @@ func (p *Principal) Has(perm Permission) bool {
 
 // CanInOrg reports whether the permission is held for the given organization.
 func (p *Principal) CanInOrg(perm Permission, org uuid.UUID) bool {
-	if p == nil {
+	if p == nil || p.blocked(perm) {
 		return false
 	}
 	for _, g := range p.Grants {
@@ -143,7 +168,7 @@ func (p *Principal) CanInOrg(perm Permission, org uuid.UUID) bool {
 
 // OrgScope returns (all=true) if the permission is held globally, otherwise the list of orgs it is held for.
 func (p *Principal) OrgScope(perm Permission) (all bool, orgs []uuid.UUID) {
-	if p == nil {
+	if p == nil || p.blocked(perm) {
 		return false, nil
 	}
 	for _, g := range p.Grants {
@@ -175,7 +200,7 @@ func (p *Principal) Permissions() []Permission {
 	var out []Permission
 	for _, g := range p.Grants {
 		for _, perm := range RolePermissions[g.Role] {
-			if !slices.Contains(out, perm) {
+			if !slices.Contains(out, perm) && !p.blocked(perm) {
 				out = append(out, perm)
 			}
 		}

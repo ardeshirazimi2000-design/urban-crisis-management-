@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -13,10 +14,13 @@ import (
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/admin"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/alert"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/apiir"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/audit"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/auth"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/damage"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/gis"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/identity"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/incident"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/media"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/medical"
@@ -27,6 +31,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/relief"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/report"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/resource"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/security"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/sitrep"
 )
 
@@ -38,14 +43,44 @@ type App struct {
 	Store    media.Store
 	Handler  http.Handler
 	Routes   []string
+	APIIR    apiir.Client
+	Settings *security.Store
+	Identity *identity.Service
 	draining atomic.Bool
+}
+
+// NewAPIIR builds the api.ir client (the simulator in mock mode).
+func NewAPIIR(cfg config.Config) apiir.Client {
+	if cfg.APIIRMode == "live" {
+		return apiir.NewLive(cfg.APIIRBaseURL, cfg.APIIRToken, cfg.APIIRShahkar, cfg.APIIROTPTemplate, cfg.APIIRTimeout)
+	}
+	return apiir.NewMock(cfg.AppEnv == "local")
 }
 
 // New builds the HTTP handler. verifier and store are injected so tests can substitute them.
 func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store media.Store) *App {
-	a := &App{Cfg: cfg, Pool: pool, Verifier: verifier, Store: store}
+	a := &App{Cfg: cfg, Pool: pool, Verifier: verifier, Store: store, APIIR: NewAPIIR(cfg)}
 	a.Resolver = &auth.Resolver{Pool: pool, TTL: cfg.PrincipalTTL, BootstrapAdmins: cfg.BootstrapAdmins}
 	guard := &auth.Guard{Pool: pool}
+	httpx.TrustedProxyHops = cfg.ProxyHops
+	audit.Configure(cfg.AuditKey, cfg.AuditFallback)
+	a.Settings = &security.Store{Defaults: security.Defaults(cfg)}
+	if pool != nil {
+		a.Settings.Pool = pool
+		audit.Disabled = func(ctx context.Context) []string {
+			st, err := a.Settings.Get(ctx)
+			if err != nil {
+				return nil
+			}
+			return st.AuditDisabled
+		}
+	}
+	loc, err := time.LoadLocation(cfg.TimeZone)
+	if err != nil {
+		loc = time.UTC
+	}
+	a.Identity = &identity.Service{Pool: pool, Cfg: cfg, APIIR: a.APIIR, Settings: a.Settings, Resolver: a.Resolver, Loc: loc}
+	a.Resolver.Sessions = a.Identity
 	area := gis.AreaFromConfig(cfg)
 
 	mux := http.NewServeMux()
@@ -78,6 +113,9 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 		MaxValidity: cfg.AlertMaxValidity}).Routes(router)
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)
 	(&admin.Module{Pool: pool, Guard: guard, Resolver: a.Resolver, ReplayLimiter: httpx.NewRateLimiter(5, 3)}).Routes(router)
+	if cfg.AuthMode == "local" {
+		(&identity.Module{Svc: a.Identity, Guard: guard, LoginLimiter: httpx.NewRateLimiter(30, 20)}).Routes(router)
+	}
 	if cfg.IsLocal() && cfg.AuthMode == "dev" {
 		dev := &admin.DevTokens{Pool: pool, Secret: []byte(cfg.DevJWTSecret), Audience: cfg.OIDCAudience, Resolver: a.Resolver,
 			StaffCode: cfg.DevAccessCodeStaff, CitizenCode: cfg.DevAccessCodeCitizen}
@@ -109,7 +147,8 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 	a.Routes = append(router.Routes, "GET /health/live", "GET /health/ready")
 	a.registerGauges()
 
-	a.Handler = httpx.Chain(mux, httpx.Recover, httpx.Correlation, httpx.AccessLog, httpx.SecurityHeaders, httpx.CORS(cfg.CORSOrigins))
+	a.Handler = httpx.Chain(mux, httpx.Recover, httpx.Correlation, httpx.ClientInfo, httpx.AccessLog, httpx.SecurityHeaders,
+		httpx.RequireHTTPS(cfg.RequireHTTPS), httpx.CORS(cfg.CORSOrigins))
 	return a
 }
 
@@ -198,8 +237,35 @@ func NewStore(ctx context.Context, cfg config.Config) (media.Store, error) {
 
 // NewVerifier builds the token verifier for the configured auth mode.
 func NewVerifier(ctx context.Context, cfg config.Config) (auth.Verifier, error) {
+	if cfg.AuthMode == "local" {
+		return identity.Verifier{Secret: []byte(cfg.JWTSecret)}, nil
+	}
 	if cfg.AuthMode == "dev" {
 		return auth.DevVerifier{Secret: []byte(cfg.DevJWTSecret), Audience: cfg.OIDCAudience}, nil
 	}
 	return auth.NewOIDCVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCAudience, cfg.OIDCJWKSURL)
+}
+
+// TLSConfig restricts the built-in HTTPS server to TLS 1.2 with the ECDHE AES-GCM/CBC suites of the AFTA
+// profile (FCS_TLSS_EXT.1) and the P-256/P-384 curves.
+func TLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
+		CurvePreferences: []tls.CurveID{tls.CurveP256, tls.CurveP384},
+	}
+}
+
+// RunBackground runs periodic security housekeeping until ctx ends: expired authentication data,
+// audit capacity and record-integrity checks.
+func (a *App) RunBackground(ctx context.Context) {
+	if a.Pool == nil {
+		return
+	}
+	a.Identity.Maintenance(ctx, 15*time.Minute)
 }

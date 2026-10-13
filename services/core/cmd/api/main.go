@@ -98,12 +98,25 @@ func run() error {
 		}()
 	}
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.RunBackground(workerCtx)
+	}()
+
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: a.Handler, ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 32 << 10}
+		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 32 << 10,
+		TLSConfig: app.TLSConfig()}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.AppEnv, "auth_mode", cfg.AuthMode)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.AppEnv, "auth_mode", cfg.AuthMode, "tls", cfg.TLSCertFile != "")
+		var err error
+		if cfg.TLSCertFile != "" {
+			err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()

@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,8 @@ type Config struct {
 	DatabaseURL string
 	AutoMigrate bool
 
-	// Auth: "dev" (HS256 shared secret, local only) or "oidc" (JWKS from issuer).
+	// Auth: "local" (built-in identity: Shahkar + SMS OTP, AFTA profile), "dev" (HS256 shared secret, local only)
+	// or "oidc" (JWKS from issuer).
 	AuthMode     string
 	DevJWTSecret string
 	// Optional access codes for the dev sign-in (a test server reachable from the Internet). When the staff code
@@ -62,6 +64,39 @@ type Config struct {
 	GISStaleAfter      time.Duration
 
 	CORSOrigins []string
+
+	// Built-in identity (AUTH_MODE=local) and AFTA security functions.
+	JWTSecret           string // signs access tokens of local sessions
+	OTPPepper           string // keys OTP code hashes
+	AuditKey            string // HMAC key of the audit chain (FCS_COP.1)
+	IntegrityKey        string // HMAC key of record integrity seals (FDP_SDI.2)
+	AuditFallback       string // local append-only file used when the audit store is unavailable (FRU_FLT.1)
+	TimeZone            string // console access windows
+	AccessTokenTTL      time.Duration
+	ConsoleSessionTTL   time.Duration
+	AppSessionTTL       time.Duration
+	OTPLength           int
+	OTPResendAfter      time.Duration
+	OTPMaxPerHour       int
+	PasswordMinLen      int
+	PasswordMaxAge      int // days, 0 = unlimited
+	LockoutThreshold    int
+	LockoutMinutes      int
+	ShahkarReverifyDays int
+	AppCitizenSignup    bool
+
+	APIIRMode        string // live | mock
+	APIIRBaseURL     string
+	APIIRToken       string
+	APIIRShahkar     string // Shahkar | ShahkarPro | ShahkarLite
+	APIIROTPTemplate int
+	APIIRTimeout     time.Duration
+
+	// Trusted path (FTP_TRP.1): refuse plain HTTP unless the request came over TLS (directly or via the proxy).
+	RequireHTTPS bool
+	ProxyHops    int // reverse proxies in front of the API that append X-Forwarded-For
+	TLSCertFile  string
+	TLSKeyFile   string
 }
 
 func Load() (Config, error) {
@@ -116,6 +151,37 @@ func Load() (Config, error) {
 		GISStaleAfter:      envDuration("GIS_STALE_AFTER", 24*time.Hour),
 
 		CORSOrigins: envList("CORS_ORIGINS"),
+
+		JWTSecret:           env("JWT_SECRET", "dev-only-jwt-secret-change-me-0123456789"),
+		OTPPepper:           env("OTP_PEPPER", "dev-only-otp-pepper-change-me-0123456789"),
+		AuditKey:            env("AUDIT_KEY", "dev-only-audit-key-change-me-0123456789"),
+		IntegrityKey:        env("INTEGRITY_KEY", "dev-only-integrity-key-change-me-012345"),
+		AuditFallback:       env("AUDIT_FALLBACK_FILE", ""),
+		TimeZone:            env("TIME_ZONE", "Asia/Tehran"),
+		AccessTokenTTL:      envDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
+		ConsoleSessionTTL:   envDuration("CONSOLE_SESSION_TTL", 8*time.Hour),
+		AppSessionTTL:       envDuration("APP_SESSION_TTL", 30*24*time.Hour),
+		OTPLength:           envInt("OTP_LENGTH", 6),
+		OTPResendAfter:      envDuration("OTP_RESEND_AFTER", 60*time.Second),
+		OTPMaxPerHour:       envInt("OTP_MAX_PER_HOUR", 5),
+		PasswordMinLen:      envInt("PASSWORD_MIN_LENGTH", 12),
+		PasswordMaxAge:      envInt("PASSWORD_MAX_AGE_DAYS", 90),
+		LockoutThreshold:    envInt("LOGIN_MAX_FAILURES", 5),
+		LockoutMinutes:      envInt("LOCKOUT_MINUTES", 15),
+		ShahkarReverifyDays: envInt("SHAHKAR_REVERIFY_DAYS", 180),
+		AppCitizenSignup:    envBool("APP_CITIZEN_SIGNUP", true),
+
+		APIIRMode:        env("APIIR_MODE", "mock"),
+		APIIRBaseURL:     strings.TrimRight(env("APIIR_BASE_URL", "https://s.api.ir"), "/"),
+		APIIRToken:       cleanToken(env("APIIR_TOKEN", "")),
+		APIIRShahkar:     env("APIIR_SHAHKAR_ENDPOINT", "ShahkarPro"),
+		APIIROTPTemplate: envInt("APIIR_OTP_TEMPLATE", 1),
+		APIIRTimeout:     envDuration("APIIR_TIMEOUT", 10*time.Second),
+
+		RequireHTTPS: envBool("REQUIRE_HTTPS", false),
+		ProxyHops:    envInt("TRUSTED_PROXY_HOPS", 0),
+		TLSCertFile:  env("TLS_CERT_FILE", ""),
+		TLSKeyFile:   env("TLS_KEY_FILE", ""),
 	}
 	// "/" means relative media URLs, so the console works whichever address (LAN or public) it was opened on.
 	c.PublicBaseURL = strings.TrimRight(c.PublicBaseURL, "/")
@@ -144,12 +210,58 @@ func (c Config) validate() error {
 		if c.DevAccessCodeStaff != "" && c.DevAccessCodeStaff == c.DevAccessCodeCitizen {
 			return fmt.Errorf("DEV_ACCESS_CODE_STAFF and DEV_ACCESS_CODE_CITIZEN must differ")
 		}
+	case "local":
+		if !c.IsLocal() {
+			var weak []string
+			for name, v := range map[string]string{"JWT_SECRET": c.JWTSecret, "OTP_PEPPER": c.OTPPepper, "AUDIT_KEY": c.AuditKey, "INTEGRITY_KEY": c.IntegrityKey} {
+				if strings.HasPrefix(v, "dev-only") {
+					weak = append(weak, name)
+				}
+			}
+			if len(weak) > 0 {
+				sort.Strings(weak)
+				return fmt.Errorf("set real secrets for %s (openssl rand -base64 48)", strings.Join(weak, ", "))
+			}
+			if c.APIIRMode != "live" || c.APIIRToken == "" {
+				return fmt.Errorf("AUTH_MODE=local outside local/test needs APIIR_MODE=live and APIIR_TOKEN")
+			}
+			if !c.RequireHTTPS {
+				return fmt.Errorf("REQUIRE_HTTPS=true is required outside local/test (trusted path)")
+			}
+		}
 	case "oidc":
 		if c.OIDCIssuerURL == "" {
 			return fmt.Errorf("OIDC_ISSUER_URL is required when AUTH_MODE=oidc")
 		}
 	default:
 		return fmt.Errorf("unknown AUTH_MODE %q", c.AuthMode)
+	}
+	for name, v := range map[string]string{"JWT_SECRET": c.JWTSecret, "OTP_PEPPER": c.OTPPepper, "AUDIT_KEY": c.AuditKey, "INTEGRITY_KEY": c.IntegrityKey} {
+		if len(v) < 32 {
+			return fmt.Errorf("%s must be at least 32 characters", name)
+		}
+	}
+	if !c.IsLocal() && (strings.HasPrefix(c.AuditKey, "dev-only") || strings.HasPrefix(c.IntegrityKey, "dev-only")) {
+		return fmt.Errorf("set real AUDIT_KEY and INTEGRITY_KEY outside local/test")
+	}
+	switch c.APIIRMode {
+	case "live", "mock":
+	default:
+		return fmt.Errorf("APIIR_MODE must be live or mock")
+	}
+	switch c.APIIRShahkar {
+	case "Shahkar", "ShahkarPro", "ShahkarLite":
+	default:
+		return fmt.Errorf("APIIR_SHAHKAR_ENDPOINT must be Shahkar, ShahkarPro or ShahkarLite")
+	}
+	if c.OTPLength < 4 || c.OTPLength > 8 {
+		return fmt.Errorf("OTP_LENGTH must be 4..8")
+	}
+	if _, err := time.LoadLocation(c.TimeZone); err != nil {
+		return fmt.Errorf("TIME_ZONE: %w", err)
+	}
+	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
+		return fmt.Errorf("TLS_CERT_FILE and TLS_KEY_FILE must be set together")
 	}
 	if len(c.MediaURLSecret) < 32 {
 		return fmt.Errorf("MEDIA_URL_SECRET must be at least 32 characters")
@@ -161,6 +273,15 @@ func (c Config) validate() error {
 		return fmt.Errorf("KAFKA_BROKERS is required when EVENT_PUBLISHER=kafka")
 	}
 	return nil
+}
+
+// cleanToken accepts an api.ir key pasted with quotes or its "Bearer " prefix.
+func cleanToken(t string) string {
+	t = strings.Trim(strings.TrimSpace(t), `"'`)
+	if len(t) > 7 && strings.EqualFold(t[:7], "bearer ") {
+		t = t[7:]
+	}
+	return strings.TrimSpace(t)
 }
 
 func env(k, def string) string {

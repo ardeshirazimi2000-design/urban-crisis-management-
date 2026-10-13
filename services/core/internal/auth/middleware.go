@@ -37,6 +37,8 @@ type Resolver struct {
 	Pool            *pgxpool.Pool
 	TTL             time.Duration
 	BootstrapAdmins []string
+	// Sessions validates built-in sessions on every request (revocation, idle timeout, binding).
+	Sessions SessionChecker
 
 	mu    sync.Mutex
 	cache map[string]cached
@@ -47,9 +49,19 @@ type cached struct {
 	exp time.Time
 }
 
+// SessionChecker validates a built-in session for the current request and reports whether the user must
+// change their password before doing anything else.
+type SessionChecker interface {
+	Check(ctx context.Context, sessionID, userID uuid.UUID, channel string) (passwordChangeRequired bool, err error)
+}
+
 func (r *Resolver) Invalidate(subject string) {
 	r.mu.Lock()
-	delete(r.cache, subject)
+	for k := range r.cache {
+		if k == subject || strings.HasPrefix(k, subject+"|") {
+			delete(r.cache, k)
+		}
+	}
 	r.mu.Unlock()
 }
 
@@ -60,6 +72,9 @@ func (r *Resolver) InvalidateAll() {
 }
 
 func (r *Resolver) Resolve(ctx context.Context, c Claims) (*Principal, error) {
+	if c.SessionID != nil {
+		return r.resolveSession(ctx, c)
+	}
 	r.mu.Lock()
 	if e, ok := r.cache[c.Subject]; ok && time.Now().Before(e.exp) {
 		r.mu.Unlock()
@@ -103,6 +118,64 @@ func (r *Resolver) Resolve(ctx context.Context, c Claims) (*Principal, error) {
 }
 
 var ErrSuspended = errors.New("user suspended")
+
+// resolveSession loads a built-in user. Grants are cached per subject and channel; the session itself is
+// checked on every request so revocation and idle timeout take effect immediately.
+func (r *Resolver) resolveSession(ctx context.Context, c Claims) (*Principal, error) {
+	key := c.Subject + "|" + c.Channel
+	r.mu.Lock()
+	e, ok := r.cache[key]
+	r.mu.Unlock()
+	var p Principal
+	if ok && time.Now().Before(e.exp) {
+		p = *e.p
+	} else {
+		var status string
+		err := r.Pool.QueryRow(ctx, `SELECT id, display_name, status FROM users WHERE subject_id=$1`, c.Subject).
+			Scan(&p.UserID, &p.DisplayName, &status)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSuspended
+		}
+		if err != nil {
+			return nil, err
+		}
+		if status != "active" {
+			return nil, ErrSuspended
+		}
+		p.Subject = c.Subject
+		p.Channel = c.Channel
+		if p.Grants, err = LoadGrants(ctx, r.Pool, p.UserID); err != nil {
+			return nil, err
+		}
+		if c.Channel == "app" {
+			// Only app roles are effective on the mobile channel; a user without one is a citizen.
+			p.Grants = slices.DeleteFunc(p.Grants, func(g Grant) bool { return !slices.Contains(AppRoles, g.Role) })
+			if len(p.Grants) == 0 {
+				p.Grants = []Grant{{Role: RoleCitizen}}
+			}
+		} else {
+			p.Grants = slices.DeleteFunc(p.Grants, func(g Grant) bool { return g.Role == RoleCitizen })
+		}
+		cp := p
+		r.mu.Lock()
+		if r.cache == nil {
+			r.cache = map[string]cached{}
+		}
+		r.cache[key] = cached{p: &cp, exp: time.Now().Add(r.TTL)}
+		r.mu.Unlock()
+	}
+	sid := *c.SessionID
+	p.SessionID = &sid
+	if r.Sessions == nil {
+		return nil, ErrSuspended
+	}
+	mustChange, err := r.Sessions.Check(ctx, sid, p.UserID, c.Channel)
+	if err != nil {
+		return nil, err
+	}
+	p.PasswordChangeRequired = mustChange
+	return &p, nil
+}
 
 func (r *Resolver) bootstrapAdmin(ctx context.Context, userID uuid.UUID) error {
 	tx, err := r.Pool.Begin(ctx)
@@ -169,9 +242,33 @@ func Authenticate(v Verifier, res *Resolver) httpx.Middleware {
 				httpx.WriteError(w, r, err)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), p)))
+			ctx := WithPrincipal(r.Context(), p)
+			if p.Channel != "" {
+				ctx = httpx.WithChannel(ctx, p.Channel)
+			}
+			// A temporary or expired password allows nothing but changing it (FIA_UAU, FMT_MTD).
+			if p.PasswordChangeRequired && !passwordChangeAllowed(r) {
+				httpx.WriteError(w, r, ErrPasswordChangeRequired)
+				return
+			}
+			// FAU_STG.4: with the audit trail full, only security staff may act until it is archived.
+			if audit.Full.Load() && !p.Has(AuditConfigure) && !p.Has(SettingsManage) {
+				httpx.WriteError(w, r, ErrAuditFull)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+var (
+	ErrPasswordChangeRequired = httpx.NewError(http.StatusForbidden, "PASSWORD_CHANGE_REQUIRED", "ابتدا رمز عبور خود را تغییر دهید")
+	ErrAuditFull              = httpx.NewError(http.StatusServiceUnavailable, "AUDIT_FULL", "ظرفیت ممیزی تکمیل است؛ تا بایگانی ممیزی، فعالیت متوقف است")
+)
+
+func passwordChangeAllowed(r *http.Request) bool {
+	p := r.URL.Path
+	return p == "/api/v1/me" || p == "/api/v1/auth/console/change-password" || p == "/api/v1/auth/logout"
 }
 
 // Guard centralises authorization decisions so every denial is audited (AT-05, AT-07).

@@ -4,11 +4,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/identity"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/logx"
@@ -18,6 +21,7 @@ import (
 
 func main() {
 	seed := flag.Bool("seed", false, "load local demo seed data (APP_ENV=local only)")
+	bootstrap := flag.Bool("bootstrap-admin", false, "create the first security administrator from BOOTSTRAP_ADMIN_* after a Shahkar match")
 	flag.Parse()
 	cfg, err := config.Load()
 	if err != nil {
@@ -38,6 +42,19 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("migrations applied", "versions", applied)
+	if *bootstrap {
+		a := app.New(cfg, pool, nil, nil)
+		temp, err := a.Identity.Bootstrap(ctx, identity.BootstrapAdmin{
+			NationalCode: os.Getenv("BOOTSTRAP_ADMIN_NATIONAL_CODE"), Mobile: os.Getenv("BOOTSTRAP_ADMIN_MOBILE"),
+			Username: os.Getenv("BOOTSTRAP_ADMIN_USERNAME"), FirstName: os.Getenv("BOOTSTRAP_ADMIN_FIRST_NAME"),
+			LastName: os.Getenv("BOOTSTRAP_ADMIN_LAST_NAME")})
+		if err != nil {
+			slog.Error("bootstrap admin", "err", err.Error())
+			os.Exit(1)
+		}
+		// Printed once on the terminal only (never logged); it must be changed at first sign-in.
+		fmt.Printf("\nSecurity administrator %q created.\nTemporary password (shown once): %s\n\n", os.Getenv("BOOTSTRAP_ADMIN_USERNAME"), temp)
+	}
 	if *seed {
 		if !cfg.IsLocal() {
 			slog.Error("refusing to seed outside APP_ENV=local|test")

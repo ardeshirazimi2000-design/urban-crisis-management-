@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // Claims is the minimal identity extracted from a verified access token.
@@ -23,6 +24,9 @@ import (
 type Claims struct {
 	Subject string
 	Name    string
+	// Built-in sessions (AUTH_MODE=local) only.
+	SessionID *uuid.UUID
+	Channel   string
 }
 
 type Verifier interface {
