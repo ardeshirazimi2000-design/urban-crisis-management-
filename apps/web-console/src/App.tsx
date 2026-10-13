@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
 import { t } from "./lib/format";
-import { LoginPage } from "./pages/Login";
+import { AccessHistoryBanner, LoginPage } from "./pages/Login";
+import { AccountPage, ForcedPasswordChange } from "./pages/Account";
+import { SecurityPage } from "./pages/Security";
 import { DashboardPage } from "./pages/Dashboard";
 import { ReportsPage } from "./pages/Reports";
 import { IncidentsPage, IncidentDetailPage } from "./pages/Incidents";
@@ -32,6 +34,7 @@ export function App() {
   const online = useOnline();
   if (loading) return <div className="center muted">در حال بارگذاری…</div>;
   if (!me) return <LoginPage />;
+  if (me.password_change_required) return <ForcedPasswordChange />;
   const nav = [
     { to: "/", label: "تصویر عملیاتی", show: can("gis:read") },
     { to: "/sitrep", label: "گزارش وضعیت", show: can("sitrep:read") },
@@ -44,7 +47,9 @@ export function App() {
     { to: "/damage", label: "ارزیابی خسارت", show: can("damage:read") },
     { to: "/guidance", label: "راهنمای شهروند", show: can("guidance:edit") || can("guidance:approve") },
     { to: "/alerts", label: "هشدارها", show: can("alert:draft") || can("alert:approve") || can("alert:read_delivery") },
-    { to: "/admin", label: "هویت و ممیزی", show: can("user:manage") || can("audit:read") },
+    { to: "/admin", label: "کاربران و نقش‌ها", show: can("user:manage") || can("event:replay") },
+    { to: "/security", label: "امنیت و ممیزی", show: can("settings:manage") || can("audit:read") || can("audit:configure") },
+    { to: "/account", label: "حساب من", show: !!me.channel },
   ].filter((n) => n.show);
   return (
     <div className="shell">
@@ -63,6 +68,7 @@ export function App() {
       </aside>
       <main className="main">
         {!online && <div className="banner warn">اتصال شبکه قطع است؛ داده‌های نمایش‌داده‌شده ممکن است کهنه باشند.</div>}
+        <AccessHistoryBanner />
         <Routes>
           <Route path="/" element={can("gis:read") ? <DashboardPage /> : <Navigate to={nav[0]?.to ?? "/admin"} />} />
           <Route path="/reports" element={<ReportsPage />} />
@@ -79,6 +85,8 @@ export function App() {
           <Route path="/alerts/new" element={<NewAlertPage />} />
           <Route path="/alerts/:id" element={<AlertDetailPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>

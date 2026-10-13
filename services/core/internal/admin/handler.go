@@ -48,7 +48,8 @@ func (m *Module) Routes(r *httpx.Router) {
 func (m *Module) me(w http.ResponseWriter, r *http.Request) error {
 	p := auth.FromContext(r.Context())
 	httpx.JSON(w, http.StatusOK, map[string]any{"user_id": p.UserID, "subject": p.Subject, "display_name": p.DisplayName,
-		"grants": p.Grants, "roles": p.RoleNames(), "permissions": p.Permissions()})
+		"grants": p.Grants, "roles": p.RoleNames(), "permissions": p.Permissions(), "channel": p.Channel,
+		"password_change_required": p.PasswordChangeRequired})
 	return nil
 }
 

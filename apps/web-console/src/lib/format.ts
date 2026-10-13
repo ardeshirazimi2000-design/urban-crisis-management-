@@ -71,7 +71,7 @@ export const L: Record<string, string> = {
   water_leak: "نشت آب", adjacent_hazard: "خطر از ساختمان مجاور",
   // roles
   CITIZEN: "شهروند", RESPONDER: "امدادگر", OPERATOR: "اپراتور", COMMANDER: "فرمانده", RESOURCE_MANAGER: "مدیر منابع",
-  GIS_ANALYST: "کارشناس GIS", SECURITY_ADMIN: "مدیر امنیت",
+  GIS_ANALYST: "کارشناس GIS", SECURITY_ADMIN: "مدیر امنیت", SECURITY_AUDITOR: "ممیز امنیتی",
 };
 
 export const t = (k: string | null | undefined) => (k ? L[k] ?? k : "—");

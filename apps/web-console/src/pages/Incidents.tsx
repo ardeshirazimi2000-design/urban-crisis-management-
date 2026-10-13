@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, newKey, type Incident, type IncidentDetail, type Report, type Resource } from "../lib/api";
+import { api, download, newKey, saveBlob, type Incident, type IncidentDetail, type Report, type Resource } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
@@ -24,7 +24,7 @@ export function IncidentsPage() {
 
   return (
     <>
-      <Section title="حوادث" actions={<Freshness at={list.updatedAt} />}>
+      <Section title="حوادث" actions={<><Freshness at={list.updatedAt} /><ExportButton /></>}>
         <label>وضعیت
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUSES.map((s) => <option key={s} value={s}>{s ? t(s) : "همه"}</option>)}
@@ -206,6 +206,22 @@ export function IncidentDetailPage() {
           ))}
         </ul>
       </Section>
+    </>
+  );
+}
+
+/** Controlled export (data:export): scope-limited, row-limited, audited and signed by the server. */
+function ExportButton() {
+  const { can } = useSession();
+  const act = useAction();
+  if (!can("data:export")) return null;
+  return (
+    <>
+      <button className="btn small" disabled={act.busy} onClick={() => void act.run(async () => {
+        const f = await download("GET", "/admin/export/incidents", { query: { format: "csv" } });
+        saveBlob(f.blob, f.name);
+      })}>خروجی CSV</button>
+      <ErrorBox error={act.error} />
     </>
   );
 }

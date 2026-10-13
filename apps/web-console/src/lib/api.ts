@@ -15,6 +15,8 @@ export class ApiError extends Error {
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api/v1";
 let token: string | null = sessionStorageGet("crisis.token");
+// Built-in sessions (AUTH_MODE=local) also carry a rotating refresh token; the tab's session storage ends with the tab.
+let refreshToken: string | null = sessionStorageGet("crisis.refresh");
 
 function sessionStorageGet(k: string): string | null {
   try {
@@ -34,7 +36,51 @@ export function setToken(t: string | null) {
   }
 }
 
+export function setRefreshToken(t: string | null) {
+  refreshToken = t;
+  try {
+    if (t) sessionStorage.setItem("crisis.refresh", t);
+    else sessionStorage.removeItem("crisis.refresh");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export const hasToken = () => token !== null;
+
+/** Called when the session can no longer be used (ended, idle timeout, replaced, binding). */
+let onSessionEnded: (reason: string) => void = () => {};
+export function setSessionEndedHandler(fn: (reason: string) => void) {
+  onSessionEnded = fn;
+}
+
+let refreshing: Promise<boolean> | null = null;
+
+/** Exchanges the refresh token for a new pair once, even when several requests notice expiry together. */
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshToken) return false;
+  refreshing ??= (async () => {
+    try {
+      const res = await fetch(BASE + "/auth/refresh", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Correlation-ID": uuid() },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) return false;
+      const t = (await res.json()) as { access_token: string; refresh_token: string };
+      setToken(t.access_token);
+      setRefreshToken(t.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setTimeout(() => (refreshing = null), 0);
+    }
+  })();
+  return refreshing;
+}
+
+/** Error codes meaning the session is over; the sign-in page then shows the reason. */
+const SESSION_CODES = new Set(["SESSION_ENDED", "SESSION_IDLE_TIMEOUT", "SESSION_BINDING", "SESSION_REPLACED"]);
 
 /**
  * RFC 4122 v4 UUID. crypto.randomUUID exists only in secure contexts (HTTPS/localhost); the console is also
@@ -56,6 +102,47 @@ export function newKey(): string {
 type Opts = { body?: unknown; idempotent?: boolean | string; query?: Record<string, string | number | undefined> };
 
 export async function api<T>(method: string, path: string, opts: Opts = {}): Promise<T> {
+  const res = await send(method, path, opts);
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!res.ok) throw toError(res, data);
+  return data as T;
+}
+
+/** Downloads a file (export/archive) and returns it with its integrity digest header. */
+export async function download(method: string, path: string, opts: Opts = {}): Promise<{ blob: Blob; name: string; digest: string }> {
+  const res = await send(method, path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw toError(res, text ? JSON.parse(text) : undefined);
+  }
+  const cd = res.headers.get("Content-Disposition") ?? "";
+  const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? "export";
+  return { blob: await res.blob(), name, digest: res.headers.get("X-Export-Digest") ?? "" };
+}
+
+export function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function toError(res: Response, data: { error?: { code?: string; message?: string; correlation_id?: string; details?: { field: string; reason: string }[] } } | undefined) {
+  const e = data?.error ?? {};
+  const code = e.code ?? "HTTP_" + res.status;
+  if (res.status === 401) {
+    setToken(null);
+    setRefreshToken(null);
+    if (SESSION_CODES.has(code) || code === "UNAUTHENTICATED") onSessionEnded(e.message ?? "");
+  }
+  return new ApiError(res.status, code, e.message ?? res.statusText, e.correlation_id ?? res.headers.get("X-Correlation-ID") ?? "", e.details ?? []);
+}
+
+async function send(method: string, path: string, opts: Opts, retried = false): Promise<Response> {
   const headers: Record<string, string> = { "X-Correlation-ID": uuid() };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
@@ -73,16 +160,12 @@ export async function api<T>(method: string, path: string, opts: Opts = {}): Pro
   } catch {
     throw new ApiError(0, "NETWORK", "ارتباط با سرور برقرار نیست", headers["X-Correlation-ID"]);
   }
-  if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : undefined;
-  if (!res.ok) {
-    const e = data?.error ?? {};
-    if (res.status === 401) setToken(null);
-    throw new ApiError(res.status, e.code ?? "HTTP_" + res.status, e.message ?? res.statusText,
-      e.correlation_id ?? res.headers.get("X-Correlation-ID") ?? "", e.details ?? []);
+  // An expired access token is renewed transparently once; other 401s (ended sessions) are final.
+  if (res.status === 401 && !retried && refreshToken && !path.startsWith("/auth/")) {
+    const body = await res.clone().json().catch(() => ({}));
+    if (body?.error?.code === "UNAUTHENTICATED" && (await tryRefresh())) return send(method, path, opts, true);
   }
-  return data as T;
+  return res;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +173,12 @@ export async function api<T>(method: string, path: string, opts: Opts = {}): Pro
 // ---------------------------------------------------------------------------
 
 export type Grant = { role: string; scope_org_id?: string | null };
-export type Me = { user_id: string; subject: string; display_name: string; grants: Grant[]; roles: string[]; permissions: string[] };
+export type Me = {
+  user_id: string; subject: string; display_name: string; grants: Grant[]; roles: string[]; permissions: string[];
+  channel?: string; password_change_required?: boolean;
+};
+export type AccessHistory = { last_login_at: string | null; last_login_ip: string | null; failed_since_last_login: number; last_failed_login_at: string | null };
+export type Tokens = { access_token: string; refresh_token: string; token_type: string; expires_in: number };
 export type Org = { id: string; code: string; name: string };
 export type Loc = { lat: number; lng: number; accuracy_m: number; source?: string; precision?: string };
 
