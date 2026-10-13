@@ -115,12 +115,19 @@ func (m *Module) users(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	kind, err := httpx.OneOf(r, "kind", "staff", "citizen")
+	if err != nil {
+		return err
+	}
 	rows, err := m.Pool.Query(ctx, `SELECT u.id, u.subject_id, u.display_name, u.status, u.created_at,
 		COALESCE(json_agg(json_build_object('grant_id', ur.id, 'role', ur.role_code, 'scope_org_id', ur.scope_org_id,
-		  'expires_at', ur.expires_at, 'reason', ur.reason)) FILTER (WHERE ur.id IS NOT NULL), '[]')
+		  'expires_at', ur.expires_at, 'reason', ur.reason)) FILTER (WHERE ur.id IS NOT NULL), '[]'),
+		u.kind, u.username, u.national_code, u.mobile, u.console_access, u.app_access, COALESCE(u.locked_until > now(), false),
+		u.last_login_at, u.shahkar_verified_at
 		FROM users u LEFT JOIN user_roles ur ON ur.user_id = u.id AND (ur.expires_at IS NULL OR ur.expires_at > now())
-		WHERE $1 = '' OR u.display_name ILIKE '%' || $1 || '%' OR u.subject_id ILIKE '%' || $1 || '%'
-		GROUP BY u.id ORDER BY u.created_at DESC LIMIT 200`, q)
+		WHERE ($1 = '' OR u.display_name ILIKE '%' || $1 || '%' OR u.subject_id ILIKE '%' || $1 || '%' OR u.username ILIKE '%' || $1 || '%'
+		       OR u.national_code = $1 OR u.mobile = $1) AND ($2 = '' OR u.kind = $2)
+		GROUP BY u.id ORDER BY u.created_at DESC LIMIT 200`, q, kind)
 	if err != nil {
 		return err
 	}
@@ -131,11 +138,17 @@ func (m *Module) users(w http.ResponseWriter, r *http.Request) error {
 		var sub, name, status string
 		var created time.Time
 		var grants []map[string]any
-		if err := rows.Scan(&id, &sub, &name, &status, &created, &grants); err != nil {
+		var kind string
+		var username, nc, mobile *string
+		var console, app, locked bool
+		var lastLogin, shahkar *time.Time
+		if err := rows.Scan(&id, &sub, &name, &status, &created, &grants, &kind, &username, &nc, &mobile, &console, &app, &locked,
+			&lastLogin, &shahkar); err != nil {
 			return err
 		}
 		items = append(items, map[string]any{"id": id, "subject": sub, "display_name": name, "status": status,
-			"created_at": created, "grants": grants})
+			"created_at": created, "grants": grants, "kind": kind, "username": username, "national_code": nc, "mobile": mobile,
+			"console_access": console, "app_access": app, "locked": locked, "last_login_at": lastLogin, "shahkar_verified_at": shahkar})
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"items": items})
 	return rows.Err()
@@ -185,6 +198,17 @@ func (m *Module) grant(w http.ResponseWriter, r *http.Request) error {
 				return httpx.ErrNotFound
 			}
 			return err
+		}
+		// One role per user: a permanent role is changed with PUT /admin/users/{id}/role; only a time-boxed
+		// break-glass grant may be held next to it.
+		if !req.BreakGlass {
+			var held int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM user_roles WHERE user_id=$1 AND (expires_at IS NULL OR expires_at > now())`, userID).Scan(&held); err != nil {
+				return err
+			}
+			if held > 0 {
+				return httpx.Conflict("ONE_ROLE_PER_USER", "هر کاربر فقط یک نقش دارد؛ برای تغییر نقش از «تغییر نقش» استفاده کنید")
+			}
 		}
 		err := tx.QueryRow(ctx, `INSERT INTO user_roles (user_id, role_code, scope_org_id, granted_by, expires_at, reason)
 			VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, userID, req.Role, req.ScopeOrgID, p.UserID, req.ExpiresAt, req.Reason).Scan(&grantID)
@@ -269,7 +293,7 @@ func (m *Module) userStatus(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var v httpx.Validator
-	v.Check(req.Status == "active" || req.Status == "suspended", "status", "not_allowed")
+	v.Check(req.Status == "active" || req.Status == "suspended" || req.Status == "disabled", "status", "not_allowed")
 	v.Check(strings.TrimSpace(req.Reason) != "", "reason", "required")
 	v.Check(userID != p.UserID, "id", "cannot_modify_self")
 	if err := v.Err(); err != nil {
@@ -277,11 +301,17 @@ func (m *Module) userStatus(w http.ResponseWriter, r *http.Request) error {
 	}
 	var subject string
 	err = db.WithTx(ctx, m.Pool, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `UPDATE users SET status=$2 WHERE id=$1 RETURNING subject_id`, userID, req.Status).Scan(&subject); err != nil {
+		if err := tx.QueryRow(ctx, `UPDATE users SET status=$2, updated_at=now() WHERE id=$1 RETURNING subject_id`, userID, req.Status).Scan(&subject); err != nil {
 			if err == pgx.ErrNoRows {
 				return httpx.ErrNotFound
 			}
 			return err
+		}
+		if req.Status != "active" {
+			if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=now(), revoked_reason='account_'||$2 WHERE user_id=$1 AND revoked_at IS NULL`,
+				userID, req.Status); err != nil {
+				return err
+			}
 		}
 		return audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "user.status", TargetType: "user",
 			TargetID: userID.String(), Outcome: "success", Reason: req.Reason, Details: map[string]any{"status": req.Status},
@@ -305,7 +335,19 @@ func (m *Module) auditList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	f := audit.Filter{TargetType: q.Get("target_type"), TargetID: q.Get("target_id"), Outcome: q.Get("outcome"), Limit: limit}
+	f := audit.Filter{TargetType: q.Get("target_type"), TargetID: q.Get("target_id"), Outcome: q.Get("outcome"), Limit: limit,
+		Action: q.Get("action"), Severity: q.Get("severity"), IP: q.Get("ip"), Ascending: q.Get("sort") == "asc"}
+	for name, dst := range map[string]**time.Time{"from": &f.From, "to": &f.To} {
+		if v := q.Get(name); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				if t, err = time.Parse("2006-01-02", v); err != nil {
+					return httpx.Validation(httpx.FieldDetail{Field: name, Reason: "invalid"})
+				}
+			}
+			*dst = &t
+		}
+	}
 	if s := q.Get("actor_id"); s != "" {
 		id, err := uuid.Parse(s)
 		if err != nil {

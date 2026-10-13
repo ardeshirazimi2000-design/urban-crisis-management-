@@ -26,6 +26,7 @@ func main() {
 		slog.Error("config", "err", err.Error())
 		os.Exit(1)
 	}
+	db.IntegrityKey = cfg.IntegrityKey
 	logx.Setup(cfg.LogLevel)
 	if len(cfg.KafkaBrokers) == 0 {
 		slog.Error("KAFKA_BROKERS is required")

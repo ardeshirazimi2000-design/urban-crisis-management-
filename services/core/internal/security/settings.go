@@ -127,7 +127,7 @@ func IsAuditKey(key string) bool { return len(key) > 6 && key[:6] == "audit." }
 
 // SelectableEvents are the only audit events the auditor may switch off (FAU_SEL.1). Authentication, access
 // control, identity/role/settings management, sessions, integrity and audit events are always recorded.
-var SelectableEvents = []string{"incident.view", "report.view", "export.view"}
+var SelectableEvents = []string{"incident.view", "report.view"}
 
 var (
 	hhmmRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)

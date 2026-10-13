@@ -21,8 +21,8 @@ import (
 )
 
 type ShahkarResult struct {
-	OK       bool   // the provider answered; false = network/provider failure
-	Matched  bool   // mobile is registered to the national code (valid only when OK)
+	OK       bool // the provider answered; false = network/provider failure
+	Matched  bool // mobile is registered to the national code (valid only when OK)
 	Endpoint string
 	Code     string
 	Message  string

@@ -296,6 +296,11 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) error {
 	if !ok {
 		return m.Guard.Deny(ctx, string(auth.IncidentRead), "incident", id.String(), "out_of_org_scope", httpx.ErrNotFound)
 	}
+	// Data access is audited; the auditor may switch this event off (FAU_SEL.1).
+	if err := audit.WriteStandalone(ctx, m.Pool, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "incident.view",
+		TargetType: "incident", TargetID: id.String(), Outcome: "success"}); err != nil {
+		return err
+	}
 	resp := map[string]any{"incident": in}
 
 	timeline := []timelineEntry{}

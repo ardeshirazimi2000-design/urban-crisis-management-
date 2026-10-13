@@ -341,6 +341,24 @@ func List(ctx context.Context, pool *pgxpool.Pool, f Filter) ([]Record, error) {
 	return out, rows.Err()
 }
 
+// ListTx returns the records up to and including seq, oldest first (inside tx, for archiving).
+func ListTx(ctx context.Context, tx pgx.Tx, upToSeq int64) ([]Record, error) {
+	rows, err := tx.Query(ctx, `SELECT `+selectCols+` FROM audit_log WHERE seq <= $1 ORDER BY seq`, upToSeq)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		r, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 type VerifyResult struct {
 	Checked   int64  `json:"checked"`
 	Valid     bool   `json:"valid"`

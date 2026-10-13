@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -406,4 +407,89 @@ func TestAppShahkarFirstThenOTP(t *testing.T) {
 	if r := anon.call("POST", "/auth/app/start", map[string]any{"national_code": op.NC, "mobile": op.Mobile, "device_id": device}); r.Status != 403 {
 		t.Fatalf("console-only user on app: %d %s", r.Status, r.Body)
 	}
+}
+
+func TestIntegritySealsAndAuditArchive(t *testing.T) {
+	local(t)
+	ctx := context.Background()
+	cmd := login(t, grant{Role: "COMMANDER", OrgCode: "command"})
+	in := createIncident(t, cmd, "command", "open")
+	auditor := staff(t, "SECURITY_AUDITOR")
+	au, _ := consoleLogin(t, auditor.Username, staffPassword, auditor.Mobile)
+
+	var res struct {
+		Checked    int `json:"checked"`
+		Violations []struct {
+			ID uuid.UUID `json:"record_id"`
+		} `json:"violations"`
+	}
+	au.must("POST", "/admin/integrity/check", nil, 200, &res)
+	for _, v := range res.Violations {
+		if v.ID == in.ID {
+			t.Fatal("an incident changed through the application must verify")
+		}
+	}
+
+	// A direct database edit without the key is detected.
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Exec(ctx, `SELECT set_config('crisis.integrity_key', '', false)`)
+	if _, err := conn.Exec(ctx, `UPDATE incidents SET severity='low' WHERE id=$1`, in.ID); err != nil {
+		t.Fatal(err)
+	}
+	conn.Exec(ctx, `SELECT set_config('crisis.integrity_key', $1, false)`, db.IntegrityKey)
+	conn.Release()
+	au.must("POST", "/admin/integrity/check", nil, 200, &res)
+	found := false
+	for _, v := range res.Violations {
+		found = found || v.ID == in.ID
+	}
+	if !found {
+		t.Fatal("tampered incident must be reported")
+	}
+	var n int
+	pool.QueryRow(ctx, `SELECT count(*) FROM security_notifications WHERE kind='integrity'`).Scan(&n)
+	if n == 0 {
+		t.Fatal("integrity violation must raise a security notification")
+	}
+	// Repair the record through the application path (re-seals) so later tests start clean.
+	pool.Exec(ctx, `UPDATE incidents SET severity='high' WHERE id=$1`, in.ID)
+
+	// Export is audited and signed; archiving keeps the remaining chain verifiable.
+	r := au.call("GET", "/admin/audit/export?format=csv", nil)
+	if r.Status != 200 || !strings.HasPrefix(r.Header.Get("X-Export-Digest"), "hmac-sha256=") {
+		t.Fatalf("export: %d %v", r.Status, r.Header)
+	}
+	admin := staff(t, "SECURITY_ADMIN")
+	a, _ := consoleLogin(t, admin.Username, staffPassword, admin.Mobile)
+	a.must("POST", "/admin/audit/archive", map[string]any{"before": "2999-01-01", "reason": "x"}, 403, nil)
+	var before int
+	pool.QueryRow(ctx, `SELECT count(*) FROM audit_log`).Scan(&before)
+	au.must("POST", "/admin/audit/archive", map[string]any{"before": time.Now().Add(-time.Second).UTC().Format(time.RFC3339), "reason": "بایگانی دوره‌ای"}, 200, nil)
+	var after int
+	pool.QueryRow(ctx, `SELECT count(*) FROM audit_log`).Scan(&after)
+	if after >= before {
+		t.Fatalf("archive must remove old records: %d -> %d", before, after)
+	}
+	var v struct {
+		Valid   bool `json:"valid"`
+		Checked int  `json:"checked"`
+	}
+	au.must("GET", "/admin/audit/verify", nil, 200, &v)
+	if !v.Valid {
+		t.Fatal("chain must verify from the archive anchor")
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM audit_log WHERE seq = (SELECT max(seq) FROM audit_log)`); err == nil {
+		t.Fatal("audit rows must not be deletable outside an archive")
+	}
+
+	// Controlled export of operational data: permission, audit and digest.
+	cmdLocal := staff(t, "COMMANDER")
+	c, _ := consoleLogin(t, cmdLocal.Username, staffPassword, cmdLocal.Mobile)
+	if r := c.call("GET", "/admin/export/incidents?format=json", nil); r.Status != 200 || r.Header.Get("X-Export-Digest") == "" {
+		t.Fatalf("export incidents: %d %s", r.Status, r.Body)
+	}
+	au.must("GET", "/admin/export/incidents", nil, 403, nil)
 }

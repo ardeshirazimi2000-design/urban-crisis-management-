@@ -46,6 +46,8 @@ func TestMain(m *testing.M) {
 	}
 	ctx := context.Background()
 	var err error
+	db.IntegrityKey = "integration-integrity-key-0123456789abcdef"
+	os.Setenv("INTEGRITY_KEY", db.IntegrityKey)
 	pool, err = db.Connect(ctx, url)
 	if err != nil {
 		fmt.Println("connect:", err)

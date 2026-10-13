@@ -23,10 +23,21 @@ type DBTX interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// IntegrityKey, when set before connecting, is given to every session so the record-integrity triggers can
+// seal changes made by the application (FDP_SDI.2). Changes made without it leave a stale seal, which the
+// integrity check reports.
+var IntegrityKey string
+
 func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
+	}
+	if key := IntegrityKey; key != "" {
+		cfg.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
+			_, err := c.Exec(ctx, `SELECT set_config('crisis.integrity_key', $1, false)`, key)
+			return err
+		}
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

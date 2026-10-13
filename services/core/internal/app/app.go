@@ -17,6 +17,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/apiir"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/audit"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/auth"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/compliance"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/damage"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/gis"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
@@ -36,17 +37,18 @@ import (
 )
 
 type App struct {
-	Cfg      config.Config
-	Pool     *pgxpool.Pool
-	Verifier auth.Verifier
-	Resolver *auth.Resolver
-	Store    media.Store
-	Handler  http.Handler
-	Routes   []string
-	APIIR    apiir.Client
-	Settings *security.Store
-	Identity *identity.Service
-	draining atomic.Bool
+	Cfg        config.Config
+	Pool       *pgxpool.Pool
+	Verifier   auth.Verifier
+	Resolver   *auth.Resolver
+	Store      media.Store
+	Handler    http.Handler
+	Routes     []string
+	APIIR      apiir.Client
+	Settings   *security.Store
+	Identity   *identity.Service
+	Compliance *compliance.Module
+	draining   atomic.Bool
 }
 
 // NewAPIIR builds the api.ir client (the simulator in mock mode).
@@ -113,6 +115,9 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 		MaxValidity: cfg.AlertMaxValidity}).Routes(router)
 	(&gis.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.GISStaleAfter, ResourceStaleAfter: cfg.ResourceStaleAfter}).Routes(router)
 	(&admin.Module{Pool: pool, Guard: guard, Resolver: a.Resolver, ReplayLimiter: httpx.NewRateLimiter(5, 3)}).Routes(router)
+	a.Compliance = &compliance.Module{Pool: pool, Guard: guard, Settings: a.Settings, APIIR: a.APIIR, IntegrityKey: cfg.IntegrityKey,
+		AuditKey: cfg.AuditKey}
+	a.Compliance.Routes(router)
 	if cfg.AuthMode == "local" {
 		(&identity.Module{Svc: a.Identity, Guard: guard, LoginLimiter: httpx.NewRateLimiter(30, 20)}).Routes(router)
 	}
@@ -267,5 +272,6 @@ func (a *App) RunBackground(ctx context.Context) {
 	if a.Pool == nil {
 		return
 	}
+	go a.Compliance.Run(ctx)
 	a.Identity.Maintenance(ctx, 15*time.Minute)
 }

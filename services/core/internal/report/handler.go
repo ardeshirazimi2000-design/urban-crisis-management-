@@ -420,6 +420,10 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) error {
 		// Hide existence from callers who may not see it, but still audit the attempt.
 		return m.Guard.Deny(ctx, string(auth.ReportRead), "report", id.String(), "not_owner", httpx.ErrNotFound)
 	}
+	if err := audit.WriteStandalone(ctx, m.Pool, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "report.view",
+		TargetType: "report", TargetID: id.String(), Outcome: "success"}); err != nil {
+		return err
+	}
 	d := detail{Report: present(p, rp), AIScores: []AIScore{}, History: []HistoryEntry{}, Incidents: []map[string]any{}}
 	if d.Media, err = media.ListForReport(ctx, m.Pool, id); err != nil {
 		return err

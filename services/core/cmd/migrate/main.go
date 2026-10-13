@@ -21,6 +21,7 @@ import (
 
 func main() {
 	seed := flag.Bool("seed", false, "load local demo seed data (APP_ENV=local only)")
+	sealExisting := flag.Bool("seal-existing", false, "seal incidents and alerts created before the integrity migration (run once after upgrading)")
 	bootstrap := flag.Bool("bootstrap-admin", false, "create the first security administrator from BOOTSTRAP_ADMIN_* after a Shahkar match")
 	flag.Parse()
 	cfg, err := config.Load()
@@ -28,6 +29,7 @@ func main() {
 		slog.Error("config", "err", err.Error())
 		os.Exit(1)
 	}
+	db.IntegrityKey = cfg.IntegrityKey
 	logx.Setup(cfg.LogLevel)
 	ctx := context.Background()
 	pool, err := db.ConnectRetry(ctx, cfg.DatabaseURL, 90*time.Second)
@@ -42,6 +44,14 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("migrations applied", "versions", applied)
+	if *sealExisting {
+		n, err := app.New(cfg, pool, nil, nil).Compliance.SealExisting(ctx)
+		if err != nil {
+			slog.Error("seal existing", "err", err.Error())
+			os.Exit(1)
+		}
+		slog.Info("existing records sealed", "count", n)
+	}
 	if *bootstrap {
 		a := app.New(cfg, pool, nil, nil)
 		temp, err := a.Identity.Bootstrap(ctx, identity.BootstrapAdmin{

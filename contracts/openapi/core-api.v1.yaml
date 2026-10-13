@@ -4,8 +4,11 @@ info:
   version: 1.0.0
   description: |
     REST contract of the core service (modular monolith). Conventions (detailed design §6.1):
-    - Bearer token (OIDC; local dev tokens only with APP_ENV=local). Authorization = permission + organisational scope,
-      resolved server-side; deny-by-default. Hidden resources answer 404.
+    - Bearer token: built-in sessions (AUTH_MODE=local: console password + SMS OTP; apps Shahkar + SMS OTP), OIDC, or local
+      dev tokens (APP_ENV=local only). Authorization = permission + organisational scope, resolved server-side;
+      deny-by-default. Hidden resources answer 404. Console-only permissions are never effective on the app channel.
+    - Built-in sessions are checked on every request (revocation, idle timeout, IP/user-agent binding); a temporary or
+      expired password allows only GET /me, change-password and logout (403 PASSWORD_CHANGE_REQUIRED).
     - `Idempotency-Key` is REQUIRED on retryable creates (reports, incidents, alerts, dispatch). Same key + same body
       replays the stored response (`Idempotent-Replayed: true`); same key + different body → 422 IDEMPOTENCY_KEY_REUSED.
     - Every response carries `X-Correlation-ID`. Errors use the fixed envelope `ErrorEnvelope`.
@@ -619,7 +622,31 @@ paths:
   /api/v1/admin/organizations:
     post: {summary: "POST /admin/organizations", tags: [admin], x-permission: user:manage, responses: {"201": {description: created}}}
   /api/v1/admin/users:
-    get: {summary: "GET /admin/users", tags: [admin], x-permission: user:manage, parameters: [{name: q, in: query, schema: {type: string}}], responses: {"200": {description: users with active grants}}}
+    get: {summary: "GET /admin/users", tags: [admin], x-permission: user:manage, parameters: [{name: q, in: query, schema: {type: string}}, {name: kind, in: query, schema: {enum: [staff, citizen]}}], responses: {"200": {description: users with active grants and identity fields}}}
+    post:
+      summary: Create a staff user after a Shahkar match (AUTH_MODE=local); returns a one-time temporary password for console users
+      tags: [admin]
+      x-permission: user:manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [national_code, mobile, first_name, last_name, role]
+              properties:
+                national_code: {type: string}
+                mobile: {type: string}
+                first_name: {type: string}
+                last_name: {type: string}
+                position_title: {type: string}
+                username: {type: string, description: required with console_access}
+                console_access: {type: boolean}
+                app_access: {type: boolean}
+                allowed_cidrs: {type: array, items: {type: string}}
+                role: {$ref: "#/components/schemas/RoleAssignment"}
+                reason: {type: string}
+      responses: {"201": {description: "{user, temporary_password}"}, "409": {description: DUPLICATE_USER}, "422": {description: SHAHKAR_MISMATCH}, "502": {description: SHAHKAR_UNAVAILABLE}}
   /api/v1/admin/users/{id}/roles:
     post:
       tags: [admin]
@@ -650,6 +677,12 @@ paths:
         - {name: actor_id, in: query, schema: {type: string, format: uuid}}
         - {name: outcome, in: query, schema: {enum: [success, denied, failed]}}
         - {name: before_seq, in: query, schema: {type: integer}}
+        - {name: action, in: query, description: prefix, schema: {type: string}}
+        - {name: severity, in: query, schema: {enum: [info, low, medium, high, critical]}}
+        - {name: ip, in: query, schema: {type: string}}
+        - {name: from, in: query, schema: {type: string, format: date-time}}
+        - {name: to, in: query, schema: {type: string, format: date-time}}
+        - {name: sort, in: query, schema: {enum: [asc, desc]}}
         - {$ref: "#/components/parameters/Limit"}
       responses: {"200": {description: audit records}}
   /api/v1/admin/audit/verify:
@@ -692,6 +725,130 @@ paths:
         "403": {description: citizen code used for a staff role or account}
         "429": {description: RATE_LIMITED}
 
+  /api/v1/auth/banner:
+    get: {tags: [identity], security: [], summary: Pre-sign-in warning banner and help (FTA_TAB.1), responses: {"200": {description: "{banner, help}"}}}
+  /api/v1/auth/console/login:
+    post:
+      tags: [identity]
+      security: []
+      summary: "Console step 1: username + password → SMS code (AUTH_MODE=local)"
+      description: Failed passwords and codes count towards a progressive lockout. Network/day/time restrictions apply.
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [username, password], properties: {username: {type: string}, password: {type: string}}}}}}
+      responses: {"200": {description: "{step: otp, challenge}"}, "401": {description: LOGIN_FAILED}, "403": {description: SESSION_NOT_ALLOWED}, "423": {description: ACCOUNT_LOCKED}, "429": {description: RATE_LIMITED}}
+  /api/v1/auth/console/verify:
+    post:
+      tags: [identity]
+      security: []
+      summary: "Console step 2: SMS code → session tokens and access history"
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [challenge_id, code], properties: {challenge_id: {type: string, format: uuid}, code: {type: string}}}}}}
+      responses: {"200": {description: "{tokens, password_change_required, access_history}"}, "401": {description: OTP_INVALID}}
+  /api/v1/auth/console/change-password:
+    post:
+      tags: [identity]
+      summary: Change own password (policy, history); other sessions end
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [current_password, new_password], properties: {current_password: {type: string}, new_password: {type: string}}}}}}
+      responses: {"204": {description: changed}, "400": {description: WRONG_PASSWORD}, "422": {description: WEAK_PASSWORD | PASSWORD_REUSED}}
+  /api/v1/auth/app/start:
+    post:
+      tags: [identity]
+      security: []
+      summary: "App step 1: Shahkar (first sign-in, new device or periodic) and SMS code"
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [national_code, mobile, device_id], properties: {national_code: {type: string}, mobile: {type: string}, device_id: {type: string}, device_token: {type: string}}}}}}
+      responses: {"200": {description: "{step: otp, challenge, shahkar_verified, needs_profile}"}, "403": {description: APP_NOT_ALLOWED | SIGNUP_DISABLED}, "422": {description: SHAHKAR_MISMATCH}}
+  /api/v1/auth/app/verify:
+    post:
+      tags: [identity]
+      security: []
+      summary: "App step 2: SMS code → session tokens and a device token for later sign-ins"
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [challenge_id, code, device_id], properties: {challenge_id: {type: string, format: uuid}, code: {type: string}, device_id: {type: string}, device_name: {type: string}, first_name: {type: string}, last_name: {type: string}}}}}}
+      responses: {"200": {description: "{tokens, device_token, access_history}"}, "401": {description: OTP_INVALID}}
+  /api/v1/auth/refresh:
+    post:
+      tags: [identity]
+      security: []
+      summary: Rotate the refresh token; reusing an old one ends the session
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [refresh_token], properties: {refresh_token: {type: string}}}}}}
+      responses: {"200": {description: tokens}, "401": {description: SESSION_ENDED | SESSION_IDLE_TIMEOUT | SESSION_BINDING | SESSION_REPLACED}}
+  /api/v1/auth/logout:
+    post: {tags: [identity], summary: End the current session, responses: {"204": {description: logged out}}}
+  /api/v1/me/sessions:
+    get: {tags: [identity], summary: Own sessions and access history (FTA_TAH.1), responses: {"200": {description: "{items, current, access_history}"}}}
+  /api/v1/admin/users/{id}:
+    get: {tags: [admin], summary: User details, x-permission: user:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: user}}}
+    patch:
+      tags: [admin]
+      summary: Update a user; a new mobile is verified with Shahkar and ends sessions and app devices
+      x-permission: user:manage
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {mobile: {type: string}, position_title: {type: string}, username: {type: string}, console_access: {type: boolean}, app_access: {type: boolean}, allowed_cidrs: {type: array, items: {type: string}}, reason: {type: string}}}}}}
+      responses: {"200": {description: "{user, temporary_password}"}}
+  /api/v1/admin/users/{id}/role:
+    put:
+      tags: [admin]
+      summary: Replace the user's single role (ends the user's sessions); not on one's own account
+      x-permission: role:manage
+      parameters: [{$ref: "#/components/parameters/Id"}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [role, reason], properties: {role: {$ref: "#/components/schemas/RoleAssignment"}, reason: {type: string}}}}}}
+      responses: {"200": {description: user}, "409": {description: LAST_SECURITY_ADMIN}}
+  /api/v1/admin/users/{id}/reset-password:
+    post: {tags: [admin], summary: Issue a temporary password (must be changed at sign-in), x-permission: user:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: "{temporary_password}"}}}
+  /api/v1/admin/users/{id}/unlock:
+    post: {tags: [admin], summary: Unlock a locked account, x-permission: user:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"204": {description: unlocked}}}
+  /api/v1/admin/users/{id}/shahkar:
+    post: {tags: [admin], summary: Re-verify mobile ownership; a mismatch suspends the account, x-permission: shahkar:inquire, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: "{matched}"}}}
+  /api/v1/admin/users/{id}/sessions:
+    get: {tags: [admin], summary: Sessions of a user, x-permission: session:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: sessions}}}
+    delete: {tags: [admin], summary: End all sessions of a user, x-permission: session:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"204": {description: revoked}}}
+  /api/v1/admin/users/{id}/sessions/{sid}:
+    delete: {tags: [admin], summary: End one session, x-permission: session:manage, parameters: [{$ref: "#/components/parameters/Id"}, {name: sid, in: path, required: true, schema: {type: string, format: uuid}}], responses: {"204": {description: revoked}}}
+  /api/v1/admin/shahkar/inquiry:
+    post:
+      tags: [admin]
+      summary: Ad-hoc Shahkar inquiry (recorded)
+      x-permission: shahkar:inquire
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [national_code, mobile], properties: {national_code: {type: string}, mobile: {type: string}}}}}}
+      responses: {"200": {description: "{ok, matched, endpoint, message}"}}
+  /api/v1/admin/shahkar/inquiries:
+    get: {tags: [admin], summary: Shahkar inquiry history, x-permission: shahkar:inquire, parameters: [{name: national_code, in: query, schema: {type: string}}], responses: {"200": {description: inquiries}}}
+  /api/v1/admin/settings:
+    get: {tags: [admin], summary: Security settings (audit.* managed by the auditor, the rest by the security administrator), x-permission: "settings:manage | audit:configure", responses: {"200": {description: "{items, selectable_events}"}}}
+  /api/v1/admin/settings/{key}:
+    put:
+      tags: [admin]
+      summary: Change one security setting (audited with before/after)
+      x-permission: "settings:manage (audit.*: audit:configure)"
+      parameters: [{name: key, in: path, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [value], properties: {value: {}, reason: {type: string}}}}}}
+      responses: {"200": {description: "{key, value}"}, "422": {description: INVALID_SETTING}}
+  /api/v1/admin/notifications:
+    get: {tags: [admin], summary: Security notifications, x-permission: "settings:manage | audit:read", responses: {"200": {description: notifications}}}
+  /api/v1/admin/audit/export:
+    get:
+      tags: [admin]
+      summary: Export the audit trail (CSV/JSON) with an HMAC digest header (X-Export-Digest); audited
+      x-permission: audit:read
+      parameters:
+        - {name: format, in: query, schema: {enum: [csv, json]}}
+        - {name: from, in: query, schema: {type: string}}
+        - {name: to, in: query, schema: {type: string}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: severity, in: query, schema: {type: string}}
+        - {name: outcome, in: query, schema: {type: string}}
+      responses: {"200": {description: file}}
+  /api/v1/admin/audit/archive:
+    post:
+      tags: [admin]
+      summary: Archive (download and remove) records older than a date; the chain continues from a recorded anchor
+      x-permission: audit:configure
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [before, reason], properties: {before: {type: string}, reason: {type: string}}}}}}
+      responses: {"200": {description: archive file}, "409": {description: AUDIT_CHAIN_BROKEN}}
+  /api/v1/admin/audit/status:
+    get: {tags: [admin], summary: Audit capacity, archives and the last integrity check, x-permission: audit:read, responses: {"200": {description: status}}}
+  /api/v1/admin/integrity/check:
+    post: {tags: [admin], summary: Verify record seals of incidents/alerts and the audit chain; violations are audited and notified, x-permission: integrity:check, responses: {"200": {description: "{checked, violations, AuditChain}"}}}
+  /api/v1/admin/export/incidents:
+    get: {tags: [admin], summary: Controlled export of incidents in scope with security metadata and digest; audited, x-permission: data:export, parameters: [{name: format, in: query, schema: {enum: [csv, json]}}], responses: {"200": {description: file}, "403": {description: EXPORT_DISABLED}}}
+
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, bearerFormat: JWT}
@@ -709,6 +866,13 @@ components:
       description: Error in the fixed envelope
       content: {application/json: {schema: {$ref: "#/components/schemas/ErrorEnvelope"}}}
   schemas:
+    RoleAssignment:
+      type: object
+      required: [role]
+      properties:
+        role: {enum: [RESPONDER, OPERATOR, COMMANDER, RESOURCE_MANAGER, GIS_ANALYST, SECURITY_ADMIN, SECURITY_AUDITOR]}
+        scope_org_id: {type: string, format: uuid, description: omitted = all organisations}
+        expires_at: {type: string, format: date-time}
     ErrorEnvelope:
       type: object
       required: [error]

@@ -23,6 +23,7 @@ func main() {
 		slog.Error("config", "err", err.Error())
 		os.Exit(1)
 	}
+	db.IntegrityKey = cfg.IntegrityKey
 	logx.Setup(cfg.LogLevel)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

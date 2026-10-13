@@ -31,11 +31,14 @@ func TestOpenAPICoversRoutes(t *testing.T) {
 			documented[strings.ToUpper(method)+" "+path] = true
 		}
 	}
-	cfg := config.Config{AppEnv: "local", AuthMode: "dev", DevJWTSecret: strings.Repeat("x", 32)}
-	a := New(cfg, nil, auth.DevVerifier{}, &media.FSStore{})
+	// Union of the routes of both sign-in modes: dev tokens (local only) and the built-in identity provider.
 	implemented := map[string]bool{}
-	for _, r := range a.Routes {
-		implemented[r] = true
+	for _, mode := range []string{"dev", "local"} {
+		cfg := config.Config{AppEnv: "local", AuthMode: mode, DevJWTSecret: strings.Repeat("x", 32), TimeZone: "UTC"}
+		a := New(cfg, nil, auth.DevVerifier{}, &media.FSStore{})
+		for _, r := range a.Routes {
+			implemented[r] = true
+		}
 	}
 	var missing, extra []string
 	for r := range implemented {

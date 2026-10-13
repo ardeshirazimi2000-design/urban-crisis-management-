@@ -52,6 +52,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	db.IntegrityKey = cfg.IntegrityKey
 	logx.Setup(cfg.LogLevel)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
