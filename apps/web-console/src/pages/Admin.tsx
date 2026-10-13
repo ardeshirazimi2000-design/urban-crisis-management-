@@ -355,7 +355,7 @@ function RolesMatrix() {
           <thead><tr><th>نقش</th><th>کانال</th><th>شرح</th><th>تعداد کاربر</th><th>تعداد دسترسی</th></tr></thead>
           <tbody>{d.roles.map((r) => (
             <tr key={r.code}><td><b>{r.title}</b><div className="muted" dir="ltr">{r.code}</div></td>
-              <td>{r.channel === "app" ? "اپلیکیشن (و کنسول)" : "کنسول"}</td><td>{r.description}</td><td>{r.users}</td><td>{r.permissions.length}</td></tr>
+              <td>{r.code === "CITIZEN" ? "اپلیکیشن" : r.channel === "app" ? "اپلیکیشن و کنسول" : "کنسول"}</td><td>{r.description}</td><td>{r.users}</td><td>{r.permissions.length}</td></tr>
           ))}</tbody>
         </table>
       )}
