@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // the images are FROM scratch: every command needs embedded zone data for TIME_ZONE
 )
 
 type Config struct {
