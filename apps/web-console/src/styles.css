@@ -128,3 +128,6 @@ textarea { width: 100%; }
 .otp { font-size: 22px; letter-spacing: 6px; text-align: center; }
 .ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ul.plain { list-style: none; padding: 0; margin: 0; }
+.tablewrap { overflow-x: auto; }
+.matrix th { white-space: nowrap; } .matrix .center-cell { text-align: center; color: var(--ok); font-weight: 700; }
+.matrix .group-row td { background: var(--sel); }

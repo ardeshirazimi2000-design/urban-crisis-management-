@@ -54,3 +54,26 @@ func TestNilPrincipalDenied(t *testing.T) {
 		t.Fatal("nil principal must be denied")
 	}
 }
+
+func TestEveryPermissionHasATitle(t *testing.T) {
+	titled := map[Permission]bool{}
+	for _, c := range Catalog {
+		if c.Title == "" || c.Group == "" {
+			t.Errorf("%s has no title or group", c.Code)
+		}
+		titled[c.Code] = true
+	}
+	for role, perms := range RolePermissions {
+		if RoleTitles[role] == "" {
+			t.Errorf("role %s has no title", role)
+		}
+		for _, p := range perms {
+			if !titled[p] {
+				t.Errorf("%s (role %s) is missing from the catalog", p, role)
+			}
+		}
+	}
+	if len(RoleOrder) != len(RolePermissions) {
+		t.Errorf("RoleOrder lists %d roles, RolePermissions has %d", len(RoleOrder), len(RolePermissions))
+	}
+}

@@ -647,6 +647,8 @@ paths:
                 role: {$ref: "#/components/schemas/RoleAssignment"}
                 reason: {type: string}
       responses: {"201": {description: "{user, temporary_password}"}, "409": {description: DUPLICATE_USER}, "422": {description: SHAHKAR_MISMATCH}, "502": {description: SHAHKAR_UNAVAILABLE}}
+  /api/v1/admin/roles:
+    get: {summary: "Roles with their permissions and channel, and the permission catalog (access matrix)", tags: [admin], x-permission: "user:manage | role:manage | audit:read", responses: {"200": {description: "{roles, permissions, console_only}"}}}
   /api/v1/admin/users/{id}/roles:
     post:
       tags: [admin]

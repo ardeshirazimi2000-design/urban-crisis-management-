@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, t } from "../lib/format";
@@ -27,6 +27,7 @@ export function AdminPage() {
   return (
     <>
       {can("user:manage") && <Users local={local} />}
+      {(can("user:manage") || can("role:manage") || can("audit:read")) && <RolesMatrix />}
       {can("shahkar:inquire") && local && <Shahkar />}
       {can("event:replay") && <Outbox />}
     </>
@@ -331,6 +332,53 @@ function Outbox() {
           ))}
         </tbody>
       </table>
+    </Section>
+  );
+}
+
+type RoleRow = { code: string; title: string; description: string; channel: string; permissions: string[]; users: number };
+type PermInfo = { code: string; group: string; title: string };
+
+/** Roles and what each one may do. Roles are fixed (separation of duties is enforced in code); each user holds one. */
+function RolesMatrix() {
+  const data = usePoll(() => api<{ roles: RoleRow[]; permissions: PermInfo[]; console_only: string[] }>("GET", "/admin/roles"), 0);
+  const [open, setOpen] = useState(false);
+  const d = data.data;
+  const groups = d ? Array.from(new Set(d.permissions.map((p) => p.group))) : [];
+  return (
+    <Section title="نقش‌ها و ماتریس دسترسی" actions={<button className="btn small" onClick={() => setOpen(!open)}>{open ? "بستن ماتریس" : "نمایش ماتریس دسترسی"}</button>}>
+      <ErrorBox error={data.error} />
+      <p className="muted small">هر کاربر یک نقش دارد که در «تعریف کاربر» یا «تغییر نقش» تعیین می‌شود. دسترسی هر نقش ثابت است تا تفکیک وظایف
+        (مدیر امنیت / ممیز / فرماندهی عملیات) دور زده نشود. دسترسی‌های مدیریتی و امنیتی در اپلیکیشن هرگز فعال نیستند.</p>
+      {d && (
+        <table className="table small">
+          <thead><tr><th>نقش</th><th>کانال</th><th>شرح</th><th>تعداد کاربر</th><th>تعداد دسترسی</th></tr></thead>
+          <tbody>{d.roles.map((r) => (
+            <tr key={r.code}><td><b>{r.title}</b><div className="muted" dir="ltr">{r.code}</div></td>
+              <td>{r.channel === "app" ? "اپلیکیشن (و کنسول)" : "کنسول"}</td><td>{r.description}</td><td>{r.users}</td><td>{r.permissions.length}</td></tr>
+          ))}</tbody>
+        </table>
+      )}
+      {d && open && (
+        <div className="tablewrap">
+          <table className="table small matrix">
+            <thead><tr><th>دسترسی</th>{d.roles.map((r) => <th key={r.code}>{r.title}</th>)}</tr></thead>
+            <tbody>
+              {groups.map((g) => (
+                <Fragment key={g}>
+                  <tr className="group-row"><td colSpan={d.roles.length + 1}><b>{g}</b></td></tr>
+                  {d.permissions.filter((p) => p.group === g).map((p) => (
+                    <tr key={p.code}>
+                      <td>{p.title}<div className="muted" dir="ltr">{p.code}</div></td>
+                      {d.roles.map((r) => <td key={r.code} className="center-cell">{r.permissions.includes(p.code) ? "✓" : ""}</td>)}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }

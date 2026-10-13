@@ -4,6 +4,7 @@ package admin
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ func (m *Module) Routes(r *httpx.Router) {
 	r.Auth("GET /organizations", m.organizations)
 	r.Auth("POST /admin/organizations", m.createOrganization)
 	r.Auth("GET /admin/users", m.users)
+	r.Auth("GET /admin/roles", m.roles)
 	r.Auth("POST /admin/users/{id}/roles", m.grant)
 	r.Auth("DELETE /admin/users/{id}/roles/{grant}", m.revoke)
 	r.Auth("POST /admin/users/{id}/status", m.userStatus)
@@ -50,6 +52,48 @@ func (m *Module) me(w http.ResponseWriter, r *http.Request) error {
 	httpx.JSON(w, http.StatusOK, map[string]any{"user_id": p.UserID, "subject": p.Subject, "display_name": p.DisplayName,
 		"grants": p.Grants, "roles": p.RoleNames(), "permissions": p.Permissions(), "channel": p.Channel,
 		"password_change_required": p.PasswordChangeRequired})
+	return nil
+}
+
+// roles returns the roles with their permissions and channel, and the permission catalog (access matrix).
+func (m *Module) roles(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	p := auth.FromContext(ctx)
+	if !p.Has(auth.UserManage) && !p.Has(auth.RoleManage) && !p.Has(auth.AuditRead) {
+		return m.Guard.Deny(ctx, string(auth.RoleManage), "role", "", "missing_permission", nil)
+	}
+	desc := map[string]string{}
+	if rows, err := m.Pool.Query(ctx, `SELECT code, description FROM roles`); err == nil {
+		for rows.Next() {
+			var c, d string
+			if rows.Scan(&c, &d) == nil {
+				desc[c] = d
+			}
+		}
+		rows.Close()
+	}
+	var counts = map[string]int{}
+	if rows, err := m.Pool.Query(ctx, `SELECT role_code, count(DISTINCT user_id) FROM user_roles
+		WHERE expires_at IS NULL OR expires_at > now() GROUP BY role_code`); err == nil {
+		for rows.Next() {
+			var c string
+			var n int
+			if rows.Scan(&c, &n) == nil {
+				counts[c] = n
+			}
+		}
+		rows.Close()
+	}
+	items := []map[string]any{}
+	for _, role := range auth.RoleOrder {
+		channel := "console"
+		if slices.Contains(auth.AppRoles, role) {
+			channel = "app"
+		}
+		items = append(items, map[string]any{"code": role, "title": auth.RoleTitles[role], "description": desc[string(role)],
+			"channel": channel, "permissions": auth.RolePermissions[role], "users": counts[string(role)]})
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"roles": items, "permissions": auth.Catalog, "console_only": auth.ConsoleOnly})
 	return nil
 }
 
