@@ -9,13 +9,27 @@ x-core-build: &core-build
 x-core-env: &core-env
   APP_ENV: ${APP_ENV:-local}
   DATABASE_URL: postgres://crisis:${POSTGRES_PASSWORD:-local-only}@postgres:5432/crisis?sslmode=disable
-  AUTH_MODE: dev
+  # dev = test sign-in with access codes (APP_ENV=local only); local = built-in identity (Shahkar + SMS OTP).
+  AUTH_MODE: ${AUTH_MODE:-dev}
+  # Built-in identity and AFTA security functions (empty = development defaults, refused in production).
+  JWT_SECRET: ${JWT_SECRET:-}
+  OTP_PEPPER: ${OTP_PEPPER:-}
+  AUDIT_KEY: ${AUDIT_KEY:-}
+  INTEGRITY_KEY: ${INTEGRITY_KEY:-}
+  APIIR_MODE: ${APIIR_MODE:-mock}
+  APIIR_TOKEN: ${APIIR_TOKEN:-}
+  APIIR_SHAHKAR_ENDPOINT: ${APIIR_SHAHKAR_ENDPOINT:-ShahkarPro}
+  REQUIRE_HTTPS: ${REQUIRE_HTTPS:-false}
+  # Proxies in front of the API that append X-Forwarded-For: the console's nginx (1), plus the host's TLS proxy (2).
+  TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+  AUDIT_FALLBACK_FILE: /data/objects/audit-fallback.jsonl
+  TIME_ZONE: Asia/Tehran
   DEV_JWT_SECRET: ${DEV_JWT_SECRET:?set DEV_JWT_SECRET in .env}
   # When set, the dev sign-in requires these codes (staff: any role; citizen: CITIZEN only). install-lan.sh sets them.
   DEV_ACCESS_CODE_STAFF: ${DEV_ACCESS_CODE_STAFF:-}
   DEV_ACCESS_CODE_CITIZEN: ${DEV_ACCESS_CODE_CITIZEN:-}
   MEDIA_URL_SECRET: ${MEDIA_URL_SECRET:?set MEDIA_URL_SECRET in .env}
-  MEDIA_ALLOW_UNSCANNED: "true"
+  MEDIA_ALLOW_UNSCANNED: ${MEDIA_ALLOW_UNSCANNED:-true}
   EVENT_PUBLISHER: kafka
   KAFKA_BROKERS: kafka:9092
   # Media on a private volume; downloads use short-lived signed URLs served through the web proxy.
@@ -76,7 +90,9 @@ services:
 
   migrate:
     build: *core-build
-    entrypoint: ["/app/migrate", "-seed"]
+    entrypoint: ["/app/migrate"]
+    # LAN test server: demo data. Production: -seal-existing (idempotent; seeding is refused outside local/test).
+    command: ${MIGRATE_COMMAND:--seed}
     environment: *core-env
     depends_on: {postgres: {condition: service_healthy}}
     restart: "no"

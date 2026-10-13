@@ -15,7 +15,9 @@ server {
   # Same-origin API through the gateway (avoids CORS and token leakage to third parties).
   location /api/ {
     proxy_pass http://api:8080;
-    proxy_set_header X-Forwarded-For $remote_addr;
+    # Appended (not replaced): the API trusts only the entries its TRUSTED_PROXY_HOPS proxies added.
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
     proxy_set_header X-Correlation-ID $http_x_correlation_id;
     client_max_body_size 12m;
   }
