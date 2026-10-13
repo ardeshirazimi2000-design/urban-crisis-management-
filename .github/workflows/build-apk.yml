@@ -20,7 +20,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      API_BASE_URL: ${{ inputs.api_base_url || vars.APK_API_BASE_URL }}
+      API_BASE_URL: ${{ inputs.api_base_url || vars.APK_API_BASE_URL || 'https://crisis.maliyarapp.ir/api/v1' }}
       DEV_AUTH: ${{ inputs.dev_auth && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4
