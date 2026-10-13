@@ -16,14 +16,30 @@ export function LoginPage() {
   const { endedReason } = useSession();
   const [mode, setMode] = useState<"loading" | "local" | "dev">("loading");
   const [banner, setBanner] = useState<Banner | null>(null);
+  const [failure, setFailure] = useState<ApiError | null>(null);
   useEffect(() => {
     api<Banner>("GET", "/auth/banner")
       .then((b) => {
         setBanner(b);
         setMode("local");
       })
-      .catch(() => setMode("dev"));
+      .catch((e) => {
+        // Only a missing endpoint means development sign-in; anything else (HTTPS required, server down) is shown.
+        if (e instanceof ApiError && e.status !== 404) setFailure(e);
+        else setMode("dev");
+      });
   }, []);
+  if (failure)
+    return (
+      <div className="login">
+        <div className="card narrow">
+          <h1>کنسول مدیریت بحران شهری</h1>
+          <ErrorBox error={failure} />
+          {failure.code === "HTTPS_REQUIRED" && <p className="muted small">نشانی را با <span dir="ltr">https://</span> باز کنید.</p>}
+          <button className="btn" onClick={() => location.reload()}>تلاش دوباره</button>
+        </div>
+      </div>
+    );
   if (mode === "loading") return <div className="center muted">در حال بارگذاری…</div>;
   return (
     <div className="login">
