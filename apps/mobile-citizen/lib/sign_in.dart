@@ -2,6 +2,7 @@ import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 
 import 'app_icons.dart';
+import 'brand.dart';
 import 'platform.dart';
 import 'state.dart';
 
@@ -82,6 +83,7 @@ class _SignInScreenState extends State<SignInScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('ورود')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        const BrandHeader(),
         if (c == null) ...[
           const Text('در اولین ورود، مالکیت شماره موبایل به نام کد ملی شما از سامانه شاهکار استعلام می‌شود؛ سپس کد تأیید پیامک می‌شود.'),
           const SizedBox(height: 12),

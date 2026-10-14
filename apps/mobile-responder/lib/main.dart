@@ -32,7 +32,7 @@ class ResponderApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'امدادگر',
+        title: 'همراه پاد — امدادگر',
         debugShowCheckedModeBanner: false,
         theme: crisisTheme(const Color(0xFF1D4ED8)),
         locale: const Locale('fa'),

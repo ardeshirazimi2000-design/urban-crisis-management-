@@ -3,6 +3,7 @@ import { api, ApiError, type AccessHistory, type Tokens } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ErrorBox, useAction } from "../components/ui";
 import { fmtTime, num } from "../lib/format";
+import { Brand } from "../components/Brand";
 
 type Banner = { banner: string; help: string };
 type Challenge = { challenge_id: string; mobile_masked: string; expires_in: number; resend_after: number };
@@ -34,7 +35,7 @@ export function LoginPage() {
     return (
       <div className="login">
         <div className="card narrow">
-          <h1>کنسول مدیریت بحران شهری</h1>
+          <Brand size="lg" />
           <ErrorBox error={failure} />
           {failure.code === "HTTPS_REQUIRED" && <p className="muted small">نشانی را با <span dir="ltr">https://</span> باز کنید.</p>}
           <button className="btn" onClick={() => location.reload()}>تلاش دوباره</button>
@@ -45,7 +46,7 @@ export function LoginPage() {
   return (
     <div className="login">
       <div className="card narrow">
-        <h1>کنسول مدیریت بحران شهری</h1>
+        <Brand size="lg" />
         {banner && <div className="banner warn" role="note">{banner.banner}</div>}
         {endedReason && <div className="banner info">{endedReason}</div>}
         {mode === "local" ? <LocalLogin help={banner?.help ?? ""} /> : <DevLogin />}

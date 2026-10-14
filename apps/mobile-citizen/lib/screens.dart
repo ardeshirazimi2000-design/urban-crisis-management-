@@ -18,7 +18,7 @@ class HomeScreen extends StatelessWidget {
         builder: (context, _) {
           final pending = state.queue.pending.length;
           return Scaffold(
-            appBar: AppBar(title: const Text('گزارش و هشدار بحران'), actions: [
+            appBar: AppBar(title: const Text('همراه پاد'), actions: [
               IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(AppIcons.sync), onPressed: state.sync),
               if (state.auth != null && !state.needsSignIn)
                 IconButton(tooltip: 'خروج', icon: const Icon(AppIcons.logout), onPressed: state.signOut),

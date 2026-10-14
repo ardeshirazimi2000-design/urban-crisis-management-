@@ -36,7 +36,7 @@ class CitizenApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'گزارش بحران',
+        title: 'همراه پاد',
         debugShowCheckedModeBanner: false,
         theme: crisisTheme(const Color(0xFFB91C1C)),
         locale: const Locale('fa'),

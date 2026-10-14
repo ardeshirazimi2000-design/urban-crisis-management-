@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
 import { t } from "./lib/format";
 import { NAV_ICONS } from "./components/icons";
+import { Brand } from "./components/Brand";
 import { LogOut } from "lucide-react";
 import { AccessHistoryBanner, LoginPage } from "./pages/Login";
 import { AccountPage, ForcedPasswordChange } from "./pages/Account";
@@ -56,7 +57,7 @@ export function App() {
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand">مدیریت بحران شهری</div>
+        <Brand />
         <nav>
           {nav.map((n) => {
             const Icon = NAV_ICONS[n.to];

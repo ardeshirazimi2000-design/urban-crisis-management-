@@ -1,6 +1,7 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 
+import 'brand.dart';
 import 'platform.dart';
 import 'state.dart';
 
@@ -59,6 +60,7 @@ class _LocalSignInScreenState extends State<LocalSignInScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('ورود امدادگر')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        const BrandHeader(subtitle: 'ورود امدادگران'),
         if (c == null) ...[
           const Text('با کد ملی و شماره موبایل ثبت‌شده توسط مدیر سامانه وارد شوید. در اولین ورود از هر گوشی، مالکیت شماره از شاهکار استعلام می‌شود.'),
           TextField(controller: _nc, keyboardType: TextInputType.number, textDirection: TextDirection.ltr,
