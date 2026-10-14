@@ -63,7 +63,7 @@ export function App() {
         <div className="side-foot">
           <div>{me.display_name || me.subject}</div>
           <div className="muted small">{me.roles.map(t).join("، ")}</div>
-          <button className="btn ghost small" onClick={logout}>خروج</button>
+          <button className="btn danger" onClick={logout}>خروج از سامانه</button>
         </div>
       </aside>
       <main className="main">
