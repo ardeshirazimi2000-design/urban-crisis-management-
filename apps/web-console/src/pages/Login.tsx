@@ -24,9 +24,10 @@ export function LoginPage() {
         setMode("local");
       })
       .catch((e) => {
-        // Only a missing endpoint means development sign-in; anything else (HTTPS required, server down) is shown.
-        if (e instanceof ApiError && e.status !== 404) setFailure(e);
-        else setMode("dev");
+        // Only a missing endpoint means development sign-in; anything else (HTTPS required, server down, a CDN
+        // error page) is shown.
+        if (e instanceof ApiError && e.status === 404) setMode("dev");
+        else setFailure(e instanceof ApiError ? e : new ApiError(0, "UNEXPECTED", String(e), ""));
       });
   }, []);
   if (failure)

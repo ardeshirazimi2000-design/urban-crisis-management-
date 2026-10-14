@@ -105,9 +105,20 @@ export async function api<T>(method: string, path: string, opts: Opts = {}): Pro
   const res = await send(method, path, opts);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  const data = text ? JSON.parse(text) : undefined;
+  const data = parseBody(res, text);
   if (!res.ok) throw toError(res, data);
   return data as T;
+}
+
+/** Parses a JSON body; anything else (a proxy or CDN error page) becomes an ApiError carrying the HTTP status. */
+function parseBody(res: Response, text: string) {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.ok) throw new ApiError(res.status, "BAD_RESPONSE", "پاسخ نامعتبر از سرور (احتمالاً از پروکسی یا CDN)", res.headers.get("X-Correlation-ID") ?? "");
+    return undefined;
+  }
 }
 
 /** Downloads a file (export/archive) and returns it with its integrity digest header. */
@@ -115,7 +126,7 @@ export async function download(method: string, path: string, opts: Opts = {}): P
   const res = await send(method, path, opts);
   if (!res.ok) {
     const text = await res.text();
-    throw toError(res, text ? JSON.parse(text) : undefined);
+    throw toError(res, parseBody(res, text));
   }
   const cd = res.headers.get("Content-Disposition") ?? "";
   const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? "export";
