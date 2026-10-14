@@ -137,3 +137,11 @@ ul.plain { list-style: none; padding: 0; margin: 0; }
 .tablewrap { overflow-x: auto; }
 .matrix th { white-space: nowrap; } .matrix .center-cell { text-align: center; color: var(--ok); font-weight: 700; }
 .matrix .group-row td { background: var(--sel); }
+
+/* Map pins: round, white line icon on the layer colour; faded = stale, dashed ring = stale or approximate. */
+.map-pin-wrap { background: none; border: none; }
+.map-pin { display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35); box-sizing: border-box; }
+.map-pin.faded { opacity: .45; }
+.map-pin.dashed { border-style: dashed; border-color: #111827; }
+.legend-pin { display: inline-flex !important; align-items: center; justify-content: center; width: 18px !important; height: 18px !important; border-radius: 50%; vertical-align: middle; }

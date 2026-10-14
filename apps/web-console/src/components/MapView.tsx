@@ -1,5 +1,8 @@
 import { useEffect, useMemo } from "react";
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { renderToStaticMarkup } from "react-dom/server";
+import L from "leaflet";
+import { GeoJSON, MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { iconFor } from "./icons";
 import type { Feature } from "../lib/api";
 import { TILE_ATTR, TILE_URL } from "../lib/tiles";
 import { ago, t } from "../lib/format";
@@ -13,6 +16,26 @@ const COLORS: Record<string, string> = {
   reports: "#d97706", incidents: "#dc2626", resources: "#2563eb", hospital: "#059669", fire_station: "#b91c1c",
   shelter: "#7c3aed", assembly_point: "#0891b2", road_closure: "#111827", hazard: "#ea580c", impact_areas: "#dc2626",
 };
+
+/** Round map pin with the feature's line icon; built once per look and reused. */
+const pinCache = new Map<string, L.DivIcon>();
+function pin(layer: string, type: string | undefined, color: string, faded: boolean, dashed: boolean): L.DivIcon {
+  const big = layer === "incidents";
+  const key = [layer, type, color, faded, dashed].join("|");
+  let icon = pinCache.get(key);
+  if (!icon) {
+    const Icon = iconFor(type, layer);
+    const size = big ? 34 : 28;
+    const svg = renderToStaticMarkup(<Icon size={big ? 18 : 15} strokeWidth={2} color="#fff" aria-hidden="true" />);
+    icon = L.divIcon({
+      className: "map-pin-wrap",
+      html: `<span class="map-pin${faded ? " faded" : ""}${dashed ? " dashed" : ""}" style="background:${color};width:${size}px;height:${size}px">${svg}</span>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2],
+    });
+    pinCache.set(key, icon);
+  }
+  return icon;
+}
 
 export const TEHRAN: [number, number] = [35.7, 51.4];
 
@@ -62,9 +85,9 @@ export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoo
           const stale = Boolean(f.properties.stale);
           const approx = f.properties.precision === "approximate";
           return (
-            <CircleMarker key={f.id} center={[lat, lng]} radius={layer === "incidents" ? 10 : 7}
-              pathOptions={{ color: (layer === "damage" ? TAG_COLORS[String(f.properties.tag)] : COLORS[layer]) ?? "#444",
-                fillOpacity: stale ? 0.15 : 0.7, dashArray: stale || approx ? "3 3" : undefined }}
+            <Marker key={f.id} position={[lat, lng]}
+              icon={pin(layer, (f.properties.report_type ?? f.properties.incident_type ?? f.properties.resource_type) as string | undefined,
+                (layer === "damage" ? TAG_COLORS[String(f.properties.tag)] : COLORS[layer]) ?? "#444", stale, stale || approx)}
               eventHandlers={{ click: () => onSelect?.(f) }}>
               <Popup>
                 <div dir="rtl" className="popup">
@@ -80,7 +103,7 @@ export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoo
                   {stale ? <div className="warn">داده کهنه — نباید زنده تلقی شود</div> : null}
                 </div>
               </Popup>
-            </CircleMarker>
+            </Marker>
           );
         })}
       </MapContainer>
@@ -93,7 +116,7 @@ export function Legend({ layers }: { layers: Record<string, { count: number; sta
     <div className="legend">
       {Object.entries(layers).map(([k, v]) => (
         <span key={k} className="legend-item">
-          <i style={{ background: COLORS[k] ?? "#444" }} /> {t(k)}: {v.note === "no_permission" ? "بدون مجوز" : v.count}
+          <i className="legend-pin" style={{ background: COLORS[k] ?? "#444" }}>{(() => { const Icon = iconFor(undefined, k); return <Icon size={11} color="#fff" strokeWidth={2.25} aria-hidden="true" />; })()}</i> {t(k)}: {v.note === "no_permission" ? "بدون مجوز" : v.count}
           {v.stale_count > 0 && <em className="warn"> ({v.stale_count} کهنه)</em>}
         </span>
       ))}

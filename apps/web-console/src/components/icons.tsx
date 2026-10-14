@@ -24,9 +24,20 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   equipment: Wrench, medical_team: HardHat,
 };
 
+/** Map layers that have no per-feature type. */
+const LAYER_ICONS: Record<string, LucideIcon> = {
+  reports: Inbox, incidents: Siren, resources: Truck, damage: Building2, hospital: Hospital, fire_station: Flame,
+  shelter: Tent, assembly_point: Users, hazard: TriangleAlert, road_closure: Construction, impact_areas: CircleAlert,
+};
+
+/** The icon for a feature's type, falling back to its layer. */
+export function iconFor(type: string | undefined, layer?: string): LucideIcon {
+  return (type && TYPE_ICONS[type]) || (layer && LAYER_ICONS[layer]) || CircleAlert;
+}
+
 /** An icon followed by the label; the icon is decorative (the text carries the meaning). */
 export function TypeLabel({ type, label }: { type: string; label: string }) {
-  const Icon = TYPE_ICONS[type] ?? CircleAlert;
+  const Icon = iconFor(type);
   return <span className="with-icon"><Icon size={16} strokeWidth={1.75} aria-hidden="true" />{label}</span>;
 }
 
