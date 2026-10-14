@@ -1,6 +1,7 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 
+import 'app_icons.dart';
 import 'platform.dart';
 import 'state.dart';
 
@@ -82,13 +83,13 @@ class MissionsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('مأموریت‌های من'), actions: [
         IconButton(
-          icon: const Icon(Icons.domain_disabled),
+          icon: const Icon(AppIcons.domainDisabled),
           tooltip: 'ارزیابی ساختمان',
           onPressed: () => showModalBottomSheet<void>(
               context: context, isScrollControlled: true, builder: (_) => DamageSheet(state: state)),
         ),
-        IconButton(icon: const Icon(Icons.sync), onPressed: state.sync, tooltip: 'همگام‌سازی'),
-        IconButton(icon: const Icon(Icons.logout), onPressed: state.signOut, tooltip: 'خروج'),
+        IconButton(icon: const Icon(AppIcons.sync), onPressed: state.sync, tooltip: 'همگام‌سازی'),
+        IconButton(icon: const Icon(AppIcons.logout), onPressed: state.signOut, tooltip: 'خروج'),
       ]),
       body: RefreshIndicator(
         onRefresh: state.sync,
@@ -97,7 +98,7 @@ class MissionsScreen extends StatelessWidget {
             Card(
               color: state.lastAccess!.failedSinceLastLogin > 0 ? const Color(0xFFFFF4DC) : null,
               child: ListTile(
-                leading: const Icon(Icons.history),
+                leading: const Icon(AppIcons.history),
                 title: Text(state.lastAccess!.lastLoginAt == null ? 'اولین ورود شما' : 'آخرین ورود: ${agoFa(state.lastAccess!.lastLoginAt!)}'),
                 subtitle: state.lastAccess!.failedSinceLastLogin > 0
                     ? Text('${faDigits(state.lastAccess!.failedSinceLastLogin)} تلاش ناموفق برای ورود به حساب شما ثبت شده است.')
@@ -108,7 +109,7 @@ class MissionsScreen extends StatelessWidget {
             const Card(
               color: Color(0xFFFFF4DC),
               child: ListTile(
-                leading: Icon(Icons.wifi_off),
+                leading: Icon(AppIcons.wifiOff),
                 title: Text('حالت آفلاین'),
                 subtitle: Text('تغییرات روی دستگاه ذخیره و پس از اتصال ارسال می‌شوند.'),
               ),
@@ -116,15 +117,15 @@ class MissionsScreen extends StatelessWidget {
           if (state.fetchedAt != null)
             Text('آخرین دریافت از سرور: ${agoFa(state.fetchedAt!)}', style: Theme.of(context).textTheme.bodySmall),
           if (state.queue.pending.isNotEmpty)
-            Card(child: ListTile(leading: const Icon(Icons.schedule_send), title: Text('${faDigits(state.queue.pending.length)} تغییر در صف ارسال'))),
+            Card(child: ListTile(leading: const Icon(AppIcons.scheduleSend), title: Text('${faDigits(state.queue.pending.length)} تغییر در صف ارسال'))),
           for (final p in state.problems)
             Card(
               color: const Color(0xFFFDE8E8),
               child: ListTile(
-                leading: const Icon(Icons.warning_amber),
+                leading: const Icon(AppIcons.warningAmber),
                 title: Text(p.state == OpState.conflict ? 'تعارض با وضعیت سرور' : 'تغییر پذیرفته نشد'),
                 subtitle: Text('${p.lastError ?? ''}\nوضعیت معتبر همان است که از سرور نمایش داده می‌شود.'),
-                trailing: IconButton(icon: const Icon(Icons.close), onPressed: () => state.queue.dismiss(p.id)),
+                trailing: IconButton(icon: const Icon(AppIcons.close), onPressed: () => state.queue.dismiss(p.id)),
               ),
             ),
           if (active.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('مأموریت فعالی ندارید.')),
@@ -154,7 +155,11 @@ class MissionCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${a.incidentCode} — ${a.resourceName}', style: Theme.of(context).textTheme.titleMedium),
+          Row(children: [
+            Icon(AppIcons.mission, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(child: Text('${a.incidentCode} — ${a.resourceName}', style: Theme.of(context).textTheme.titleMedium)),
+          ]),
           Text('وضعیت: ${assignmentStatusLabels[a.status] ?? a.status}${pending ? ' (در انتظار همگام‌سازی)' : ''}'),
           Text('شرح ارجاع: ${a.reason}'),
           Text('تخصیص: ${agoFa(a.assignedAt)}', style: Theme.of(context).textTheme.bodySmall),
@@ -165,7 +170,7 @@ class MissionCard extends StatelessWidget {
             for (final next in a.nextStatuses)
               FilledButton(onPressed: () => state.setStatus(a, next), child: Text(assignmentStatusLabels[next] ?? next)),
             OutlinedButton.icon(
-              icon: const Icon(Icons.personal_injury),
+              icon: const Icon(AppIcons.personalInjury),
               label: const Text('ثبت مصدوم'),
               onPressed: () => showModalBottomSheet<void>(
                 context: context,
@@ -174,13 +179,13 @@ class MissionCard extends StatelessWidget {
               ),
             ),
             OutlinedButton.icon(
-              icon: const Icon(Icons.domain_disabled),
+              icon: const Icon(AppIcons.domainDisabled),
               label: const Text('ارزیابی ساختمان'),
               onPressed: () => showModalBottomSheet<void>(
                   context: context, isScrollControlled: true, builder: (_) => DamageSheet(state: state, incidentId: a.incidentId)),
             ),
             OutlinedButton.icon(
-              icon: const Icon(Icons.my_location),
+              icon: const Icon(AppIcons.myLocation),
               label: const Text('ارسال موقعیت'),
               onPressed: () async {
                 final loc = await currentLocation();

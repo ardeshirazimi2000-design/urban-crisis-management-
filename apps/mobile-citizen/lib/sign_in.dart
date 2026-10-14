@@ -1,6 +1,7 @@
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 
+import 'app_icons.dart';
 import 'platform.dart';
 import 'state.dart';
 
@@ -13,7 +14,7 @@ class SignInCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         color: const Color(0xFFE8F0FE),
         child: ListTile(
-          leading: const Icon(Icons.verified_user),
+          leading: const Icon(AppIcons.verifiedUser),
           title: const Text('ورود به سامانه'),
           subtitle: const Text('برای ثبت گزارش و دریافت هشدار، با کد ملی و شماره موبایل به نام خودتان وارد شوید.'),
           trailing: FilledButton(
@@ -134,10 +135,10 @@ class AccessHistoryCard extends StatelessWidget {
     return Card(
       color: failed > 0 ? const Color(0xFFFFF4DC) : null,
       child: ListTile(
-        leading: Icon(failed > 0 ? Icons.warning_amber : Icons.history),
+        leading: Icon(failed > 0 ? AppIcons.warningAmber : AppIcons.history),
         title: Text(h.lastLoginAt == null ? 'اولین ورود شما' : 'آخرین ورود: ${agoFa(h.lastLoginAt!)}'),
         subtitle: failed > 0 ? Text('${faDigits(failed)} تلاش ناموفق برای ورود به حساب شما ثبت شده است.') : null,
-        trailing: IconButton(icon: const Icon(Icons.close), onPressed: state.dismissAccessHistory),
+        trailing: IconButton(icon: const Icon(AppIcons.close), onPressed: state.dismissAccessHistory),
       ),
     );
   }

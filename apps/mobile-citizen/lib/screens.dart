@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_icons.dart';
 import 'platform.dart';
 import 'sign_in.dart';
 import 'state.dart';
@@ -18,9 +19,9 @@ class HomeScreen extends StatelessWidget {
           final pending = state.queue.pending.length;
           return Scaffold(
             appBar: AppBar(title: const Text('گزارش و هشدار بحران'), actions: [
-              IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(Icons.sync), onPressed: state.sync),
+              IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(AppIcons.sync), onPressed: state.sync),
               if (state.auth != null && !state.needsSignIn)
-                IconButton(tooltip: 'خروج', icon: const Icon(Icons.logout), onPressed: state.signOut),
+                IconButton(tooltip: 'خروج', icon: const Icon(AppIcons.logout), onPressed: state.signOut),
             ]),
             body: RefreshIndicator(
               onRefresh: state.sync,
@@ -29,7 +30,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52), backgroundColor: const Color(0xFF0F766E)),
-                  icon: const Icon(Icons.support_agent),
+                  icon: const Icon(AppIcons.supportAgent),
                   label: const Text('دستیار بحران: چه کار کنم؟'),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AssistantScreen(state: state))),
                 ),
@@ -40,20 +41,20 @@ class HomeScreen extends StatelessWidget {
                   const Card(
                     color: Color(0xFFFFF4DC),
                     child: ListTile(
-                      leading: Icon(Icons.wifi_off),
+                      leading: Icon(AppIcons.wifiOff),
                       title: Text('اتصال برقرار نیست'),
                       subtitle: Text('گزارش‌ها روی دستگاه (رمزنگاری‌شده) نگه داشته و پس از وصل شدن ارسال می‌شوند.'),
                     ),
                   ),
                 if (pending > 0)
-                  Card(child: ListTile(leading: const Icon(Icons.schedule_send), title: Text('${faDigits(pending)} گزارش در صف ارسال'))),
+                  Card(child: ListTile(leading: const Icon(AppIcons.scheduleSend), title: Text('${faDigits(pending)} گزارش در صف ارسال'))),
                 const SizedBox(height: 8),
                 Text('هشدارهای رسمی محدوده شما', style: Theme.of(context).textTheme.titleMedium),
                 if (state.alertsFetchedAt != null)
                   Text('آخرین به‌روزرسانی: ${agoFa(state.alertsFetchedAt!)}', style: Theme.of(context).textTheme.bodySmall),
                 if (state.lastLocation == null)
                   TextButton.icon(
-                    icon: const Icon(Icons.my_location),
+                    icon: const Icon(AppIcons.myLocation),
                     label: const Text('دریافت هشدارهای محل من'),
                     onPressed: () async {
                       state.lastLocation = await currentLocation();
@@ -65,7 +66,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-                  icon: const Icon(Icons.campaign),
+                  icon: const Icon(AppIcons.campaign),
                   label: const Text('ثبت گزارش'),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReportScreen(state: state))),
                 ),
@@ -76,7 +77,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.night_shelter),
+                  icon: const Icon(AppIcons.nightShelter),
                   label: const Text('محل‌های اسکان اضطراری نزدیک'),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SheltersScreen(state: state))),
                 ),
@@ -230,7 +231,13 @@ class _ReportScreenState extends State<ReportScreen> {
             DropdownButtonFormField<String>(
               value: _type,
               decoration: const InputDecoration(labelText: 'نوع رخداد', border: OutlineInputBorder()),
-              items: [for (final e in reportTypes.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+              items: [
+                for (final e in reportTypes.entries)
+                  DropdownMenuItem(
+                    value: e.key,
+                    child: Row(children: [Icon(AppIcons.reportType(e.key), size: 20), const SizedBox(width: 10), Text(e.value)]),
+                  ),
+              ],
               onChanged: (v) => setState(() => _type = v),
               validator: (v) => v == null ? 'نوع رخداد را انتخاب کنید' : null,
             ),
@@ -244,10 +251,10 @@ class _ReportScreenState extends State<ReportScreen> {
             const SizedBox(height: 12),
             Card(
               child: ListTile(
-                leading: _locating ? const CircularProgressIndicator() : Icon(_loc == null ? Icons.location_off : Icons.location_on),
+                leading: _locating ? const CircularProgressIndicator() : Icon(_loc == null ? AppIcons.locationOff : AppIcons.locationOn),
                 title: Text(_loc == null ? (_locError ?? 'در حال دریافت موقعیت…') : 'موقعیت دریافت شد'),
                 subtitle: _loc == null ? null : Text('دقت تقریبی ${faDigits(_loc!.accuracyM.round())} متر'),
-                trailing: IconButton(icon: const Icon(Icons.refresh), onPressed: _locating ? null : _locate),
+                trailing: IconButton(icon: const Icon(AppIcons.refresh), onPressed: _locating ? null : _locate),
               ),
             ),
             const Padding(
@@ -283,14 +290,14 @@ class MyReportsScreen extends StatelessWidget {
             body: ListView(children: [
               for (final o in local)
                 ListTile(
-                  leading: Icon(o.state == OpState.pending ? Icons.schedule : Icons.error_outline),
+                  leading: Icon(o.state == OpState.pending ? AppIcons.schedule : AppIcons.errorOutline),
                   title: Text(reportTypes[o.body['type']] ?? '${o.body['type']}'),
                   subtitle: Text(o.state == OpState.pending ? 'در انتظار ارسال · ${agoFa(o.occurredAt)}' : 'ارسال ناموفق: ${o.lastError}'),
-                  trailing: o.state == OpState.pending ? null : IconButton(icon: const Icon(Icons.close), onPressed: () => state.queue.dismiss(o.id)),
+                  trailing: o.state == OpState.pending ? null : IconButton(icon: const Icon(AppIcons.close), onPressed: () => state.queue.dismiss(o.id)),
                 ),
               for (final r in state.myReports)
                 ListTile(
-                  leading: const Icon(Icons.check_circle_outline),
+                  leading: const Icon(AppIcons.checkCircleOutline),
                   title: Text(reportTypes[r.type] ?? r.type),
                   subtitle: Text('${reportStatusLabels[r.status] ?? r.status} · ${agoFa(r.receivedAt)}'),
                 ),
@@ -369,7 +376,7 @@ class _SheltersScreenState extends State<SheltersScreen> {
           final s = widget.state;
           return Scaffold(
             appBar: AppBar(title: const Text('محل‌های اسکان نزدیک'), actions: [
-              IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(Icons.my_location), onPressed: _locating ? null : _refresh),
+              IconButton(tooltip: 'به‌روزرسانی', icon: const Icon(AppIcons.myLocation), onPressed: _locating ? null : _refresh),
             ]),
             body: RefreshIndicator(
               onRefresh: _refresh,
@@ -394,7 +401,7 @@ class _SheltersScreenState extends State<SheltersScreen> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.night_shelter, color: Color(0xFF15803D)),
+                          leading: const Icon(AppIcons.nightShelter, color: Color(0xFF15803D)),
                           title: Text(sh.name),
                           subtitle: Text('${sh.organization}\nفاصله: ${_distance(sh.distanceM)} · جای خالی: ${faDigits(sh.available)} نفر'
                               '${sh.updatedAt == null ? '' : '\nآمار: ${agoFa(sh.updatedAt!)}'}'),
@@ -403,14 +410,14 @@ class _SheltersScreenState extends State<SheltersScreen> {
                         Row(children: [
                           Expanded(
                             child: FilledButton.icon(
-                              icon: const Icon(Icons.directions),
+                              icon: const Icon(AppIcons.directions),
                               label: const Text('مسیریابی'),
                               onPressed: () => _navigate(context, sh),
                             ),
                           ),
                           IconButton(
                             tooltip: 'کپی مختصات',
-                            icon: const Icon(Icons.copy),
+                            icon: const Icon(AppIcons.copy),
                             onPressed: () => _copy(context, sh, 'مختصات کپی شد؛ در برنامه نقشه جست‌وجو کنید.'),
                           ),
                         ]),
@@ -492,7 +499,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                           Wrap(spacing: 6, runSpacing: 6, children: [
                             for (final c in Assistant(kb).suggestions)
                               ActionChip(
-                                avatar: c.emergency ? const Icon(Icons.warning_amber, color: Color(0xFFDC2626), size: 18) : null,
+                                avatar: c.emergency ? const Icon(AppIcons.warningAmber, color: Color(0xFFDC2626), size: 18) : null,
                                 label: Text(c.title),
                                 onPressed: () => _ask(c.title),
                               ),
@@ -525,7 +532,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                         decoration: const InputDecoration(hintText: 'مثلاً: بوی گاز می‌آید چه کنم؟', border: OutlineInputBorder(), isDense: true),
                       ),
                     ),
-                    IconButton.filled(icon: const Icon(Icons.send), tooltip: 'پرسیدن', onPressed: () => _ask(_q.text)),
+                    IconButton.filled(icon: const Icon(AppIcons.send), tooltip: 'پرسیدن', onPressed: () => _ask(_q.text)),
                   ]),
                 ),
               ),
@@ -566,7 +573,7 @@ class CallButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FilledButton.icon(
         style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
-        icon: const Icon(Icons.call),
+        icon: const Icon(AppIcons.call),
         label: Text('تماس با ${faDigits(number)}'),
         onPressed: () async {
           final ok = await launchUrl(Uri.parse('tel:$number'));
@@ -595,7 +602,7 @@ class GuidanceCardView extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            if (emergency) const Padding(padding: EdgeInsetsDirectional.only(end: 6), child: Icon(Icons.warning_amber, color: Color(0xFFDC2626))),
+            if (emergency) const Padding(padding: EdgeInsetsDirectional.only(end: 6), child: Icon(AppIcons.warningAmber, color: Color(0xFFDC2626))),
             Expanded(child: Text(card.title, style: Theme.of(context).textTheme.titleMedium)),
           ]),
           const SizedBox(height: 6),
@@ -607,19 +614,19 @@ class GuidanceCardView extends StatelessWidget {
                 CallButton(number: a.substring(5))
               else if (a == 'report')
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.campaign),
+                  icon: const Icon(AppIcons.campaign),
                   label: const Text('ثبت گزارش'),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReportScreen(state: state))),
                 )
               else if (a == 'shelters')
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.night_shelter),
+                  icon: const Icon(AppIcons.nightShelter),
                   label: const Text('محل‌های اسکان نزدیک'),
                   onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SheltersScreen(state: state))),
                 )
               else if (a == 'alerts')
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.notifications_active),
+                  icon: const Icon(AppIcons.notificationsActive),
                   label: const Text('هشدارهای رسمی'),
                   onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
                 ),
