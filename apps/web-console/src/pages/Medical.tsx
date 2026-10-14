@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { ago, ER_LABEL, fmtTime, num, t, TRIAGE } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 import { Meter } from "./Needs";
+import { Ambulance, BedDouble, CloudOff, HeartPulse, Hospital as HospitalIcon, Stat, UserCheck } from "../components/icons";
 
 const AGE: Record<string, string> = { child: "کودک", adult: "بزرگسال", elderly: "سالمند", unknown: "نامشخص" };
 const SEX: Record<string, string> = { female: "زن", male: "مرد", unknown: "نامشخص" };
@@ -28,12 +29,12 @@ export function HospitalsPage() {
         <ErrorBox error={list.error} />
         {list.data && (
           <div className="stats">
-            <div><span className="muted small">بیمارستان پذیرنده</span><b>{num(s.receiving ?? 0)} از {num(s.hospitals ?? 0)}</b></div>
-            <div><span className="muted small">تخت خالی</span><b>{num(s.beds_available ?? 0)}</b></div>
-            <div><span className="muted small">تخت ویژه (ICU) خالی</span><b>{num(s.icu_available ?? 0)}</b></div>
-            <div><span className="muted small">مصدوم در راه</span><b>{num(s.incoming ?? 0)}</b></div>
-            <div><span className="muted small">بستری</span><b>{num(s.admitted ?? 0)}</b></div>
-            <div className={s.not_current ? "warn" : ""}><span className="muted small">بدون گزارش به‌روز</span><b>{num(s.not_current ?? 0)}</b></div>
+            <Stat icon={HospitalIcon} label="بیمارستان پذیرنده" value={<>{num(s.receiving ?? 0)} از {num(s.hospitals ?? 0)}</>} />
+            <Stat icon={BedDouble} label="تخت خالی" value={num(s.beds_available ?? 0)} />
+            <Stat icon={HeartPulse} label="تخت ویژه (ICU) خالی" value={num(s.icu_available ?? 0)} />
+            <Stat icon={Ambulance} label="مصدوم در راه" value={num(s.incoming ?? 0)} />
+            <Stat icon={UserCheck} label="بستری" value={num(s.admitted ?? 0)} />
+            <Stat icon={CloudOff} label="بدون گزارش به‌روز" value={num(s.not_current ?? 0)} tone={s.not_current ? "warn" : undefined} />
           </div>
         )}
         <table className="table">

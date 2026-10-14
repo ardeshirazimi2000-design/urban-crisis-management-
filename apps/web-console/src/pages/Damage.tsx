@@ -6,6 +6,7 @@ import { ago, BUILDING_USES, DAMAGE_TAGS, fmtTime, num, OBSERVATIONS, t } from "
 import { Badge, Empty, ErrorBox, Freshness, Section, useAction, usePoll } from "../components/ui";
 import { MapView } from "../components/MapView";
 import { MapPicker, type PickedPoint } from "../components/MapPicker";
+import { PersonStanding, ShieldAlert, ShieldCheck, ShieldX, Stat, TagLabel, TypeLabel } from "../components/icons";
 
 export type Assessment = {
   id: string; incident_id: string | null; incident_code: string | null; location: { lat: number; lng: number };
@@ -35,10 +36,10 @@ export function DamagePage() {
         <ErrorBox error={list.error} />
         {list.data && (
           <div className="stats">
-            <div><span className="muted small">قرمز — ناایمن</span><b>{num(c.red ?? 0)}</b></div>
-            <div><span className="muted small">زرد — استفاده محدود</span><b>{num(c.yellow ?? 0)}</b></div>
-            <div><span className="muted small">سبز — قابل استفاده</span><b>{num(c.green ?? 0)}</b></div>
-            <div className={list.data.people_trapped ? "warn" : ""}><span className="muted small">با احتمال افراد محبوس</span><b>{num(list.data.people_trapped)}</b></div>
+            <Stat icon={ShieldX} label="قرمز — ناایمن" value={num(c.red ?? 0)} tone="red" />
+            <Stat icon={ShieldAlert} label="زرد — استفاده محدود" value={num(c.yellow ?? 0)} tone="yellow" />
+            <Stat icon={ShieldCheck} label="سبز — قابل استفاده" value={num(c.green ?? 0)} tone="green" />
+            <Stat icon={PersonStanding} label="با احتمال افراد محبوس" value={num(list.data.people_trapped)} tone={list.data.people_trapped ? "warn" : undefined} />
           </div>
         )}
         <div className="row gap wrap filters">
@@ -60,7 +61,7 @@ export function DamagePage() {
             {items.map((a) => (
               <tr key={a.id} className={(selected === a.id ? "sel " : "") + (a.people_trapped ? "warn-row" : "")} onClick={() => { setSelected(a.id); setCreating(null); }}>
                 <td><Badge value={a.tag} /></td>
-                <td>{t(a.building_use)}{a.floors ? <span className="muted small"> · {num(a.floors)} طبقه</span> : null}</td>
+                <td><TypeLabel type={a.building_use} label={t(a.building_use)} />{a.floors ? <span className="muted small"> · {num(a.floors)} طبقه</span> : null}</td>
                 <td className="small">{a.address_text || "—"}{a.people_trapped && <div className="warn">احتمال افراد محبوس</div>}</td>
                 <td className="small">{a.observations.map(t).join("، ") || "—"}</td>
                 <td title={fmtTime(a.created_at)}>{ago(a.created_at)}</td>
@@ -82,7 +83,7 @@ function AssessmentPanel({ id, onReassess }: { id: string; onReassess: (a: Asses
   if (!d.data) return <Section title="جزئیات"><ErrorBox error={d.error} /></Section>;
   const { assessment: a, history } = d.data;
   return (
-    <Section title={<>{t(a.building_use)} <Badge value={a.tag} /></>}>
+    <Section title={<><TypeLabel type={a.building_use} label={t(a.building_use)} /> <TagLabel tag={a.tag} label={t(a.tag)} /></>}>
       {a.superseded_at && <p className="warn">این ارزیابی با بازدید جدیدتر جایگزین شده است ({ago(a.superseded_at)}).</p>}
       <dl className="kv">
         <dt>نشانی</dt><dd>{a.address_text || "—"}</dd>

@@ -86,7 +86,7 @@ export function MapView({ features, height = 520, onSelect, center = TEHRAN, zoo
           const approx = f.properties.precision === "approximate";
           return (
             <Marker key={f.id} position={[lat, lng]}
-              icon={pin(layer, (f.properties.report_type ?? f.properties.incident_type ?? f.properties.resource_type) as string | undefined,
+              icon={pin(layer, (f.properties.report_type ?? f.properties.incident_type ?? f.properties.resource_type ?? f.properties.building_use) as string | undefined,
                 (layer === "damage" ? TAG_COLORS[String(f.properties.tag)] : COLORS[layer]) ?? "#444", stale, stale || approx)}
               eventHandlers={{ click: () => onSelect?.(f) }}>
               <Popup>

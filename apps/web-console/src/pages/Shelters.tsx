@@ -4,6 +4,7 @@ import { useSession } from "../lib/session";
 import { ago, fmtTime, num } from "../lib/format";
 import { Empty, ErrorBox, Freshness, Section, useAction, usePoll } from "../components/ui";
 import { Meter } from "./Needs";
+import { BedDouble, DoorOpen, Gauge, Stat, Tent, Users } from "../components/icons";
 
 type Summary = { shelters: number; open: number; capacity: number; occupancy: number; available_in_open: number };
 
@@ -27,11 +28,11 @@ export function SheltersPage() {
         <ErrorBox error={list.error} />
         {sum && (
           <div className="stats">
-            <div><span className="muted small">محل‌های اسکان</span><b>{num(sum.shelters)}</b></div>
-            <div><span className="muted small">پذیرش باز</span><b>{num(sum.open)}</b></div>
-            <div><span className="muted small">اسکان‌یافته</span><b>{num(sum.occupancy)}</b></div>
-            <div><span className="muted small">ظرفیت کل</span><b>{num(sum.capacity)}</b></div>
-            <div><span className="muted small">جای خالی (محل‌های باز)</span><b>{num(sum.available_in_open)}</b></div>
+            <Stat icon={Tent} label="محل‌های اسکان" value={num(sum.shelters)} />
+            <Stat icon={DoorOpen} label="پذیرش باز" value={num(sum.open)} tone="green" />
+            <Stat icon={Users} label="اسکان‌یافته" value={num(sum.occupancy)} />
+            <Stat icon={Gauge} label="ظرفیت کل" value={num(sum.capacity)} />
+            <Stat icon={BedDouble} label="جای خالی (محل‌های باز)" value={num(sum.available_in_open)} />
           </div>
         )}
         {list.data && list.data.items.length === 0 && <Empty>محل اسکانی در محدوده دسترسی شما ثبت نشده است (منابع از نوع «اسکان اضطراری»).</Empty>}
@@ -40,7 +41,7 @@ export function SheltersPage() {
           <tbody>
             {list.data?.items.map((s) => (
               <tr key={s.id} className={selected === s.id ? "sel" : ""} onClick={() => setSelected(s.id)}>
-                <td>{s.name}</td>
+                <td><span className="with-icon"><Tent size={16} strokeWidth={1.75} aria-hidden="true" />{s.name}</span></td>
                 <td className="small">{orgName(s.organization_id)}</td>
                 <td>
                   {s.capacity !== null && <Meter value={s.occupancy} max={s.capacity} invert />}
