@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type Resource } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ago, num, RESOURCE_TYPES, t } from "../lib/format";
+import { TypeLabel } from "../components/icons";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 
 export function ResourcesPage() {
@@ -35,7 +36,7 @@ export function ResourcesPage() {
           <tbody>
             {items.map((r) => (
               <tr key={r.id}>
-                <td>{r.name}</td><td>{t(r.type)}</td><td>{orgName(r.organization_id)}</td><td><Badge value={r.status} /></td>
+                <td>{r.name}</td><td><TypeLabel type={r.type} label={t(r.type)} /></td><td>{orgName(r.organization_id)}</td><td><Badge value={r.status} /></td>
                 <td>{num(r.capacity)}</td>
                 <td>{r.stale ? <span className="warn">کهنه — {ago(r.last_seen_at)}</span> : ago(r.last_seen_at)}</td>
                 <td>{can("resource:manage") && ["available", "out_of_service"].includes(r.status) && (

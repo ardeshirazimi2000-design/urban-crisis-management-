@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useSession } from "./lib/session";
 import { t } from "./lib/format";
+import { NAV_ICONS } from "./components/icons";
+import { LogOut } from "lucide-react";
 import { AccessHistoryBanner, LoginPage } from "./pages/Login";
 import { AccountPage, ForcedPasswordChange } from "./pages/Account";
 import { SecurityPage } from "./pages/Security";
@@ -56,14 +58,19 @@ export function App() {
       <aside className="side">
         <div className="brand">مدیریت بحران شهری</div>
         <nav>
-          {nav.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.to === "/"}>{n.label}</NavLink>
-          ))}
+          {nav.map((n) => {
+            const Icon = NAV_ICONS[n.to];
+            return (
+              <NavLink key={n.to} to={n.to} end={n.to === "/"}>
+                {Icon && <Icon size={18} strokeWidth={1.75} aria-hidden="true" />}{n.label}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="side-foot">
           <div>{me.display_name || me.subject}</div>
           <div className="muted small">{me.roles.map(t).join("، ")}</div>
-          <button className="btn danger" onClick={logout}>خروج از سامانه</button>
+          <button className="btn danger" onClick={logout}><LogOut size={16} aria-hidden="true" /> خروج از سامانه</button>
         </div>
       </aside>
       <main className="main">

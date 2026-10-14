@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 import { IncidentNeeds } from "./Needs";
+import { TypeLabel } from "../components/icons";
 import { IncidentCasualties } from "./Medical";
 
 const STATUSES = ["", "draft", "open", "active", "escalated", "contained", "resolved", "closed"];
@@ -33,11 +34,12 @@ export function IncidentsPage() {
         <ErrorBox error={list.error} />
         {list.data?.items.length === 0 && <Empty>حادثه‌ای نیست.</Empty>}
         <table className="table">
-          <thead><tr><th>کد</th><th>عنوان</th><th>وضعیت</th><th>شدت</th><th>سطح</th><th>گزارش‌ها</th><th>مأموریت فعال</th><th>آخرین تغییر</th></tr></thead>
+          <thead><tr><th>کد</th><th>نوع</th><th>عنوان</th><th>وضعیت</th><th>شدت</th><th>سطح</th><th>گزارش‌ها</th><th>مأموریت فعال</th><th>آخرین تغییر</th></tr></thead>
           <tbody>
             {list.data?.items.map((i) => (
               <tr key={i.id}>
                 <td><Link to={`/incidents/${i.id}`}>{i.code}</Link></td>
+                <td><TypeLabel type={i.type} label={t(i.type)} /></td>
                 <td>{i.title}</td>
                 <td><Badge value={i.status} /></td>
                 <td><Badge value={i.severity} /></td>
@@ -103,7 +105,7 @@ export function IncidentDetailPage() {
       <Section title={<>{i.code} — {i.title} <Badge value={i.status} /></>} actions={<Freshness at={d.updatedAt} />}>
         <ErrorBox error={act.error} />
         <dl className="kv">
-          <dt>نوع</dt><dd>{t(i.type)}</dd>
+          <dt>نوع</dt><dd><TypeLabel type={i.type} label={t(i.type)} /></dd>
           <dt>شدت / سطح پاسخ</dt><dd><Badge value={i.severity} /> {LEVEL_LABEL[i.response_level]}</dd>
           <dt>سازمان مالک</dt><dd>{orgName(i.owner_org_id)}</dd>
           <dt>تشکیل</dt><dd>{fmtTime(i.opened_at)}</dd>
@@ -140,7 +142,7 @@ export function IncidentDetailPage() {
             <tbody>
               {assignments.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.resource_name}</td><td>{t(a.resource_type)}</td><td><Badge value={a.status} /></td><td>{ago(a.assigned_at)}</td>
+                  <td>{a.resource_name}</td><td><TypeLabel type={a.resource_type} label={t(a.resource_type)} /></td><td><Badge value={a.status} /></td><td>{ago(a.assigned_at)}</td>
                   <td>{can("resource:allocate") && !["completed", "cancelled"].includes(a.status) && (
                     <ReasonAction label="لغو و آزادسازی" danger onSubmit={async (reason) => {
                       await api("POST", `/assignments/${a.id}/status`, { body: { status: "cancelled", reason, version: a.version } });

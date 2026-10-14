@@ -19,7 +19,8 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin: 0; } h3 { font-size: 14px;
 .side { background: var(--surface); border-inline-end: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .brand { font-weight: 700; font-size: 16px; }
 .side nav { display: flex; flex-direction: column; gap: 4px; }
-.side nav a { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--text); }
+.side nav a { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.side nav a svg { color: var(--muted); flex: none; } .side nav a.active svg { color: var(--primary); }
 .side nav a.active { background: var(--sel); color: var(--primary); font-weight: 700; }
 .side-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .side-foot .btn { align-self: stretch; }
@@ -52,7 +53,11 @@ textarea { width: 100%; }
 .badge-available, .badge-sent, .badge-accepted, .badge-delivered, .badge-resolved, .badge-completed { color: var(--ok); border-color: var(--ok); }
 .badge-active, .badge-sending, .badge-approved, .badge-test { color: var(--primary); border-color: var(--primary); }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi-icon { color: var(--primary); display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 12px; background: var(--sel); margin-bottom: 6px; }
+.kpi.warn .kpi-icon { color: var(--warn); background: var(--warn-bg); }
+.with-icon { display: inline-flex; align-items: center; gap: 6px; } .with-icon svg { color: var(--primary); flex: none; }
+.btn svg { vertical-align: -3px; }
 .kpi b { font-size: 20px; } .kpi span { color: var(--muted); font-size: 12px; } .kpi.warn { border-color: var(--warn); }
 .banner { padding: 8px 12px; border-radius: 8px; } .banner.warn { background: var(--warn-bg); color: var(--warn); } .banner.info { background: var(--info-bg); }
 .error { background: var(--error-bg); color: var(--danger); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }

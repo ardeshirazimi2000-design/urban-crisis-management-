@@ -4,6 +4,7 @@ import { useSession } from "../lib/session";
 import { num, t } from "../lib/format";
 import { ErrorBox, Freshness, Section, usePoll } from "../components/ui";
 import { CITIES, Legend, MapView } from "../components/MapView";
+import { Clock, CloudOff, Inbox, Siren, TriangleAlert, type LucideIcon } from "../components/icons";
 
 const ALL_LAYERS = ["reports", "incidents", "resources", "damage", "impact_areas", "hospital", "fire_station", "shelter", "assembly_point", "road_closure", "hazard"];
 
@@ -27,11 +28,11 @@ export function DashboardPage() {
   return (
     <>
       <div className="kpis">
-        <div className="kpi"><b>{num(open.length)}</b><span>گزارش در انتظار تصمیم</span></div>
-        <div className="kpi"><b>{oldest ? <Freshness at={oldest} label="قدیمی‌ترین" /> : "—"}</b><span>سن صف بررسی</span></div>
-        <div className="kpi"><b>{num(incidents.data?.items.length ?? 0)}</b><span>حادثه باز</span></div>
-        <div className="kpi"><b>{num(incidents.data?.items.filter((i) => i.severity === "critical").length ?? 0)}</b><span>حادثه بحرانی</span></div>
-        <div className={stale ? "kpi warn" : "kpi"}><b>{num(stale)}</b><span>عارضه با داده کهنه</span></div>
+        <Kpi icon={Inbox} value={num(open.length)} label="گزارش در انتظار تصمیم" />
+        <Kpi icon={Clock} value={oldest ? <Freshness at={oldest} label="قدیمی‌ترین" /> : "—"} label="سن صف بررسی" />
+        <Kpi icon={Siren} value={num(incidents.data?.items.length ?? 0)} label="حادثه باز" />
+        <Kpi icon={TriangleAlert} value={num(incidents.data?.items.filter((i) => i.severity === "critical").length ?? 0)} label="حادثه بحرانی" />
+        <Kpi icon={CloudOff} value={num(stale)} label="عارضه با داده کهنه" warn={stale > 0} />
       </div>
       <Section title="تصویر عملیاتی مشترک" actions={<Freshness at={map.updatedAt} />}>
         <div className="row gap wrap filters">
@@ -60,5 +61,15 @@ export function DashboardPage() {
         <p className="muted small">خطوط نقطه‌چین: داده کهنه، موقعیت تقریبی یا برآورد تأییدنشده. محدوده اثر صرفاً برآورد اولیه است.</p>
       </Section>
     </>
+  );
+}
+
+function Kpi({ icon: Icon, value, label, warn }: { icon: LucideIcon; value: React.ReactNode; label: string; warn?: boolean }) {
+  return (
+    <div className={warn ? "kpi warn" : "kpi"}>
+      <span className="kpi-icon"><Icon size={26} strokeWidth={1.5} aria-hidden="true" /></span>
+      <b>{value}</b>
+      <span>{label}</span>
+    </div>
   );
 }

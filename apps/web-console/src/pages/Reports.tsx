@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { ago, fmtTime, num, REPORT_TYPES, SEVERITIES, t } from "../lib/format";
 import { Badge, Empty, ErrorBox, Freshness, ReasonAction, Section, useAction, usePoll } from "../components/ui";
 import { MapView } from "../components/MapView";
+import { TypeLabel } from "../components/icons";
 import { PhoneReportForm } from "./PhoneReport";
 
 const QUEUE_STATUSES = ["open", "", "received", "triage", "under_review", "accepted", "rejected", "duplicate", "linked_to_incident"];
@@ -43,7 +44,7 @@ export function ReportsPage() {
           <tbody>
             {list.data?.items.map((r) => (
               <tr key={r.id} className={selected === r.id ? "sel" : ""} onClick={() => { setSelected(r.id); setIntake(false); }}>
-                <td>{t(r.type)}</td>
+                <td><TypeLabel type={r.type} label={t(r.type)} /></td>
                 <td className="small">{t(r.source)}</td>
                 <td><Badge value={r.status} /></td>
                 <td>{r.severity ? <Badge value={r.severity} /> : "—"}</td>
