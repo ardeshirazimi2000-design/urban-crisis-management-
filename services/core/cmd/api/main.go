@@ -95,7 +95,7 @@ func run() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters()}).Run(workerCtx)
+			_ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters(pool, cfg)}).Run(workerCtx)
 		}()
 	}
 

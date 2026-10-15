@@ -775,6 +775,18 @@ paths:
     post: {tags: [identity], summary: End the current session, responses: {"204": {description: logged out}}}
   /api/v1/me/sessions:
     get: {tags: [identity], summary: Own sessions and access history (FTA_TAH.1), responses: {"200": {description: "{items, current, access_history}"}}}
+  /api/v1/me/push:
+    post: {tags: [push], summary: "The caller's push topic (created on first use) for the app's background long-poll", responses: {"200": {description: "{topic, poll_path, wait_seconds}"}}}
+    delete: {tags: [push], summary: Revoke the caller's push topic (sign-out), responses: {"204": {description: revoked}}}
+  /api/v1/push/poll:
+    get:
+      tags: [push]
+      summary: "Long-poll a push topic (no credentials: the unguessable topic in X-Push-Topic is the capability; kept out of URLs and logs). Without since only the cursor is returned; otherwise waits up to wait_seconds for messages newer than since."
+      security: []
+      parameters:
+        - {name: X-Push-Topic, in: header, required: true, schema: {type: string}}
+        - {name: since, in: query, schema: {type: integer, format: int64}}
+      responses: {"200": {description: "{messages: [{id, title, body, kind, ref, created_at}], last_id}"}, "404": {description: unknown or revoked topic}}
   /api/v1/admin/users/{id}:
     get: {tags: [admin], summary: User details, x-permission: user:manage, parameters: [{$ref: "#/components/parameters/Id"}], responses: {"200": {description: user}}}
     patch:

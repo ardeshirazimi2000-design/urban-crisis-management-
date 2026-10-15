@@ -34,5 +34,5 @@ func main() {
 	}
 	defer pool.Close()
 	slog.Info("notifier started")
-	_ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters()}).Run(ctx)
+	_ = (&notification.Worker{Pool: pool, Adapters: app.NewAdapters(pool, cfg)}).Run(ctx)
 }

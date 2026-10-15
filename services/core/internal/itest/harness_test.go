@@ -223,6 +223,7 @@ func createAcceptedReport(t *testing.T, citizen, operator *client) uuid.UUID {
 
 type incidentResp struct {
 	ID      uuid.UUID `json:"id"`
+	Code    string    `json:"code"`
 	Status  string    `json:"status"`
 	Version int       `json:"version"`
 }

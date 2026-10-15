@@ -60,6 +60,11 @@ type Config struct {
 
 	AlertRequireDistinctApprover bool
 	AlertMaxValidity             time.Duration
+	// Public alerts by SMS (api.ir) to app users inside the area; test-mode alerts only to AlertTestMobiles.
+	AlertSMSEnabled  bool
+	AlertSMSMax      int
+	AlertTestMobiles []string
+	MissionSMS       bool // responders also get mission notices by SMS
 
 	ResourceStaleAfter time.Duration
 	GISStaleAfter      time.Duration
@@ -147,6 +152,10 @@ func Load() (Config, error) {
 
 		AlertRequireDistinctApprover: envBool("ALERT_REQUIRE_DISTINCT_APPROVER", true),
 		AlertMaxValidity:             envDuration("ALERT_MAX_VALIDITY", 72*time.Hour),
+		AlertSMSEnabled:              envBool("ALERT_SMS_ENABLED", true),
+		AlertSMSMax:                  envInt("ALERT_SMS_MAX", 2000),
+		AlertTestMobiles:             mobiles(env("ALERT_TEST_MOBILES", "")),
+		MissionSMS:                   envBool("MISSION_SMS_ENABLED", true),
 
 		ResourceStaleAfter: envDuration("RESOURCE_STALE_AFTER", 10*time.Minute),
 		GISStaleAfter:      envDuration("GIS_STALE_AFTER", 24*time.Hour),
@@ -290,6 +299,23 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// mobiles parses a comma-separated list of mobile numbers into the stored form (09xxxxxxxxx).
+func mobiles(s string) []string {
+	var out []string
+	for _, f := range strings.Split(s, ",") {
+		f = strings.TrimSpace(f)
+		if strings.HasPrefix(f, "+98") {
+			f = "0" + f[3:]
+		} else if strings.HasPrefix(f, "98") && len(f) == 12 {
+			f = "0" + f[2:]
+		}
+		if f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func envBool(k string, def bool) bool {

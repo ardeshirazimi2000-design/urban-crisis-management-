@@ -29,6 +29,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/httpx"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/push"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/relief"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/report"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/resource"
@@ -48,6 +49,7 @@ type App struct {
 	Settings   *security.Store
 	Identity   *identity.Service
 	Compliance *compliance.Module
+	Push       *push.Service
 	draining   atomic.Bool
 }
 
@@ -105,7 +107,9 @@ func New(cfg config.Config, pool *pgxpool.Pool, verifier auth.Verifier, store me
 	(&media.Module{Pool: pool, Guard: guard, Store: store, Scanner: media.NoopScanner{}, MaxBytes: cfg.MediaMaxBytes,
 		AllowUnscanned: cfg.MediaAllowUnscanned, Limiter: reportLimiter}).Routes(router)
 	(&incident.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
-	(&resource.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.ResourceStaleAfter}).Routes(router)
+	a.Push = &push.Service{Pool: pool, SMS: a.APIIR, MissionSMS: cfg.MissionSMS}
+	a.Push.Routes(router)
+	(&resource.Module{Pool: pool, Guard: guard, Area: area, StaleAfter: cfg.ResourceStaleAfter, Notify: a.Push}).Routes(router)
 	(&relief.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&medical.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
 	(&damage.Module{Pool: pool, Guard: guard, Area: area}).Routes(router)
@@ -222,12 +226,18 @@ func NewPublisher(cfg config.Config) outbox.Publisher {
 	return outbox.LogPublisher{}
 }
 
-// NewAdapters returns the notification channel adapters. All public channels are sandboxed in the MVP.
-func NewAdapters() map[string]notification.Adapter {
+// NewAdapters returns the notification channel adapters. Push goes through the platform's own push service to the
+// app users inside the alert area; SMS through api.ir (sandboxed when ALERT_SMS_ENABLED=false); cell broadcast
+// needs an operator contract and stays disabled.
+func NewAdapters(pool *pgxpool.Pool, cfg config.Config) map[string]notification.Adapter {
+	sms := notification.Adapter(notification.NewSandbox("sms", 0.10, 0.05))
+	if cfg.AlertSMSEnabled {
+		sms = &push.AlertAdapter{Pool: pool, Name: "sms", SMS: NewAPIIR(cfg), MaxRecipients: cfg.AlertSMSMax, TestMobiles: cfg.AlertTestMobiles}
+	}
 	return map[string]notification.Adapter{
 		"internal":       notification.InternalAdapter{},
-		"push":           notification.NewSandbox("push", 0.05, 0.05),
-		"sms":            notification.NewSandbox("sms", 0.10, 0.05),
+		"push":           &push.AlertAdapter{Pool: pool, Name: "push", TestMobiles: cfg.AlertTestMobiles},
+		"sms":            sms,
 		"cell_broadcast": notification.CellBroadcastAdapter{},
 	}
 }
@@ -273,5 +283,6 @@ func (a *App) RunBackground(ctx context.Context) {
 		return
 	}
 	go a.Compliance.Run(ctx)
+	go a.Push.Run(ctx)
 	a.Identity.Maintenance(ctx, 15*time.Minute)
 }

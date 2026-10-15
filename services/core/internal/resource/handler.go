@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/httpx"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/push"
 )
 
 type Module struct {
@@ -25,6 +27,7 @@ type Module struct {
 	Guard      *auth.Guard
 	Area       gis.Area
 	StaleAfter time.Duration
+	Notify     *push.Service // mission notices to the responder (push + SMS); nil in tests that do not need it
 }
 
 func (m *Module) Routes(r *httpx.Router) {
@@ -419,6 +422,12 @@ func (m *Module) assign(w http.ResponseWriter, r *http.Request) error {
 			Details: map[string]any{"incident_id": incidentID, "resource_id": rs.ID}, CorrelationID: httpx.CorrelationID(ctx)}); err != nil {
 			return err
 		}
+		if req.AssigneeID != nil && status == "assigned" {
+			if err := m.Notify.NotifyUser(ctx, tx, *req.AssigneeID, "مأموریت جدید",
+				fmt.Sprintf("حادثه %s، منبع %s. جزئیات در اپ امدادگر.", in.Code, rs.Name), "assignment", id.String()); err != nil {
+				return err
+			}
+		}
 		out, err = loadAssignment(ctx, tx, id, false)
 		return err
 	})
@@ -506,6 +515,12 @@ func (m *Module) assignmentStatus(w http.ResponseWriter, r *http.Request) error 
 			Aggregate: outbox.Aggregate{Type: "resource", ID: rs.ID, Version: rs.Version + 1},
 			Payload:   map[string]any{"assignment_id": id, "incident_id": a.IncidentID, "from": a.Status, "to": req.Status}}); err != nil {
 			return err
+		}
+		if req.Status == "cancelled" && a.AssigneeID != nil && *a.AssigneeID != p.UserID {
+			if err := m.Notify.NotifyUser(ctx, tx, *a.AssigneeID, "لغو مأموریت",
+				fmt.Sprintf("مأموریت حادثه %s لغو شد. دلیل: %s", a.IncidentCode, req.Reason), "assignment", id.String()); err != nil {
+				return err
+			}
 		}
 		if released {
 			if err := audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "resource.release",

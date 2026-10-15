@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -582,6 +583,15 @@ func (m *Module) public(w http.ResponseWriter, r *http.Request) error {
 	lng, e2 := strconv.ParseFloat(q.Get("lng"), 64)
 	if e1 != nil || e2 != nil || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
 		return httpx.Validation(httpx.FieldDetail{Field: "lat,lng", Reason: "invalid"})
+	}
+	// Remember roughly where this app user is, so new alerts for the area reach them by push/SMS.
+	if p := auth.FromContext(ctx); p.UserID != uuid.Nil {
+		// Rounded to about 100 m and purged after 72 hours by the push service (migration 0010).
+		if _, err := m.Pool.Exec(ctx, `INSERT INTO user_locations (user_id, location, updated_at)
+			VALUES ($1, ST_SetSRID(ST_MakePoint(round($3::numeric, 3)::float8, round($2::numeric, 3)::float8), 4326)::geography, now())
+			ON CONFLICT (user_id) DO UPDATE SET location = EXCLUDED.location, updated_at = now()`, p.UserID, lat, lng); err != nil {
+			slog.WarnContext(ctx, "record location", "err", err.Error())
+		}
 	}
 	rows, err := m.Pool.Query(ctx, `SELECT a.id, a.severity, a.rendered_text, o.name, a.issued_at, a.expires_at, a.region_label
 		FROM alerts a JOIN organizations o ON o.id=a.issuer_org_id
