@@ -36,7 +36,7 @@ type Client interface {
 }
 
 type result struct {
-	Data    *bool           `json:"data"`
+	Data    json.RawMessage `json:"data"` // bool for Shahkar/SmsOTP; SendSms returns a number (message id)
 	Success bool            `json:"success"`
 	Code    json.RawMessage `json:"code"`
 	Message *string         `json:"message"`
@@ -80,6 +80,15 @@ func (l *Live) post(ctx context.Context, path string, body any) (result, error) 
 	return r, nil
 }
 
+// dataBool reads data as a boolean; def is returned when data is absent, null or not a boolean.
+func (r result) dataBool(def bool) bool {
+	var b bool
+	if len(r.Data) == 0 || json.Unmarshal(r.Data, &b) != nil {
+		return def
+	}
+	return b
+}
+
 func (r result) code() string { return strings.Trim(string(r.Code), `"`) }
 
 func (r result) message() string {
@@ -103,7 +112,7 @@ func (l *Live) Shahkar(ctx context.Context, nationalCode, mobile string) Shahkar
 		return out
 	}
 	out.OK, out.Code, out.Message = r.Success, r.code(), r.message()
-	out.Matched = r.Success && r.Data != nil && *r.Data
+	out.Matched = r.Success && r.dataBool(false)
 	return out
 }
 
@@ -112,7 +121,7 @@ func (l *Live) SendOTP(ctx context.Context, mobile, code string) error {
 	if err != nil {
 		return err
 	}
-	if !r.Success || (r.Data != nil && !*r.Data) {
+	if !r.Success || !r.dataBool(true) {
 		return fmt.Errorf("api.ir SmsOTP rejected: %s %s", r.code(), r.message())
 	}
 	return nil
@@ -126,6 +135,7 @@ func (l *Live) SendSMS(ctx context.Context, mobiles []string, message string) er
 	if !r.Success {
 		return fmt.Errorf("api.ir SendSms rejected: %s %s", r.code(), r.message())
 	}
+	slog.InfoContext(ctx, "api.ir SendSms accepted", "recipients", len(mobiles), "data", string(r.Data))
 	return nil
 }
 
