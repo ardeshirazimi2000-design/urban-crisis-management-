@@ -557,6 +557,9 @@ func (m *Module) delivery(w http.ResponseWriter, r *http.Request) error {
 	channels := []map[string]any{}
 	for _, c := range a.Channels {
 		atts := byChannel[c]
+		if atts == nil {
+			atts = []Attempt{} // never sent: an empty list, not null (the console iterates it)
+		}
 		latest := "not_started"
 		if len(atts) > 0 {
 			latest = atts[len(atts)-1].Status

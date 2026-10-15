@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -377,6 +378,10 @@ func TestAT07_AlertWorkflow(t *testing.T) {
 	op := login(t, grant{Role: "OPERATOR", OrgCode: "command"})
 	cmd := login(t, grant{Role: "COMMANDER", OrgCode: "command"})
 	a := draftAlert(t, op, []string{"internal"})
+	// Before any dispatch each channel lists no attempts as [] (a null crashed the console's alert page).
+	if r := cmd.raw("GET", "/alerts/"+a.ID.String()+"/delivery", nil, nil); r.Status != 200 || !strings.Contains(string(r.Body), `"attempts":[]`) {
+		t.Fatalf("delivery before dispatch: %d %s", r.Status, r.Body)
+	}
 
 	r := cmd.raw("POST", "/alerts/"+a.ID.String()+"/dispatch", nil, idem())
 	if r.Status != 409 || r.errCode() != "NOT_APPROVED" {

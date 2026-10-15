@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { PageErrorBoundary } from "./components/ErrorBoundary";
 import { useSession } from "./lib/session";
 import { t } from "./lib/format";
 import { NAV_ICONS } from "./components/icons";
@@ -35,6 +36,7 @@ function useOnline() {
 export function App() {
   const { me, loading, can, logout } = useSession();
   const online = useOnline();
+  const { pathname } = useLocation();
   if (loading) return <div className="center muted">در حال بارگذاری…</div>;
   if (!me) return <LoginPage />;
   if (me.password_change_required) return <ForcedPasswordChange />;
@@ -77,6 +79,7 @@ export function App() {
       <main className="main">
         {!online && <div className="banner warn">اتصال شبکه قطع است؛ داده‌های نمایش‌داده‌شده ممکن است کهنه باشند.</div>}
         <AccessHistoryBanner />
+        <PageErrorBoundary key={pathname}>
         <Routes>
           <Route path="/" element={can("gis:read") ? <DashboardPage /> : <Navigate to={nav[0]?.to ?? "/admin"} />} />
           <Route path="/reports" element={<ReportsPage />} />
@@ -97,6 +100,7 @@ export function App() {
           <Route path="/account" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
+        </PageErrorBoundary>
       </main>
     </div>
   );

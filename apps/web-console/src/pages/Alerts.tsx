@@ -179,7 +179,7 @@ export function AlertDetailPage() {
               {delivery.data.channels.map((c) => (
                 <tr key={c.channel}>
                   <td>{t(c.channel)}</td><td><span className={`badge badge-${c.status}`}>{tAttempt(c.status)}</span></td>
-                  <td className="small">{c.attempts.map((x) => `#${x.attempt_no} ${tAttempt(x.status)}${x.result_code ? ` (${x.result_code})` : ""} ${x.attempted_at ? ago(x.attempted_at) : ""}`).join(" · ")}</td>
+                  <td className="small">{(c.attempts ?? []).map((x) => `#${x.attempt_no} ${tAttempt(x.status)}${x.result_code ? ` (${x.result_code})` : ""} ${x.attempted_at ? ago(x.attempted_at) : ""}`).join(" · ")}</td>
                 </tr>
               ))}
             </tbody>
