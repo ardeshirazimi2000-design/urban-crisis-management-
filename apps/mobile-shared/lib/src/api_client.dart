@@ -71,8 +71,16 @@ class ApiClient {
     } catch (_) {
       throw ApiException(0, 'NETWORK', 'ارتباط با سرور برقرار نیست', correlationId: headers['X-Correlation-ID']!);
     }
-    final text = utf8.decode(res.bodyBytes);
-    final data = text.isEmpty ? null : jsonDecode(text);
+    final text = utf8.decode(res.bodyBytes, allowMalformed: true);
+    dynamic data;
+    try {
+      data = text.isEmpty ? null : jsonDecode(text);
+    } on FormatException {
+      // Not the API's JSON: a proxy/CDN error page (server restarting, gateway timeout) or a captive portal.
+      throw ApiException(res.statusCode, 'BAD_RESPONSE',
+          'پاسخ نامعتبر از سرور (کد ${res.statusCode})؛ چند لحظه بعد دوباره تلاش کنید.',
+          correlationId: headers['X-Correlation-ID']!);
+    }
     if (res.statusCode >= 400) {
       final e = (data is Map ? data['error'] : null) as Map<String, dynamic>? ?? {};
       throw ApiException(res.statusCode, (e['code'] as String?) ?? 'HTTP_${res.statusCode}',

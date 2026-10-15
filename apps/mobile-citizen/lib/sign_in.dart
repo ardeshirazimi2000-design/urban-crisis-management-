@@ -73,8 +73,12 @@ class _SignInScreenState extends State<SignInScreen> {
       await fn();
     } on ApiException catch (e) {
       _error = describeApiError(e);
+    } catch (e) {
+      // Anything else (storage, an unexpected answer) must not leave the button spinning.
+      _error = 'خطای غیرمنتظره؛ دوباره تلاش کنید. ($e)';
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (mounted) setState(() => _busy = false);
   }
 
   @override
