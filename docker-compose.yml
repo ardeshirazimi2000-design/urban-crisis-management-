@@ -20,6 +20,12 @@ x-core-env: &core-env
   APIIR_TOKEN: ${APIIR_TOKEN:-}
   APIIR_SHAHKAR_ENDPOINT: ${APIIR_SHAHKAR_ENDPOINT:-ShahkarPro}
   REQUIRE_HTTPS: ${REQUIRE_HTTPS:-false}
+  # Public alerts by SMS (api.ir) to app users inside the area, at most ALERT_SMS_MAX per alert; test-mode alerts
+  # reach only ALERT_TEST_MOBILES (comma-separated). Responders get mission notices by SMS too.
+  ALERT_SMS_ENABLED: ${ALERT_SMS_ENABLED:-true}
+  ALERT_SMS_MAX: ${ALERT_SMS_MAX:-2000}
+  ALERT_TEST_MOBILES: ${ALERT_TEST_MOBILES:-}
+  MISSION_SMS_ENABLED: ${MISSION_SMS_ENABLED:-true}
   # Proxies in front of the API that append X-Forwarded-For: the console's nginx (1), plus the host's TLS proxy (2).
   TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
   AUDIT_FALLBACK_FILE: /data/objects/audit-fallback.jsonl

@@ -90,6 +90,23 @@ class ApiClient {
     return (d['items'] as List).map((e) => MyReport.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// The signed-in user's push topic (created on first use) for the background notification service.
+  Future<String> registerPush() async {
+    final d = await request('POST', '/me/push') as Map<String, dynamic>;
+    return d['topic'] as String;
+  }
+
+  /// Revokes the push topic (sign-out).
+  Future<void> unregisterPush() async {
+    await request('DELETE', '/me/push');
+  }
+
+  /// Long-poll address of the platform's push service.
+  String get pushPollUrl {
+    final b = baseUrl.toString();
+    return '${b.endsWith('/') ? b.substring(0, b.length - 1) : b}/push/poll';
+  }
+
   Future<List<PublicAlert>> activeAlerts(double lat, double lng) async {
     final d = await request('GET', '/alerts/public', query: {'lat': '$lat', 'lng': '$lng'}) as Map<String, dynamic>;
     return (d['items'] as List).map((e) => PublicAlert.fromJson(e as Map<String, dynamic>)).toList();

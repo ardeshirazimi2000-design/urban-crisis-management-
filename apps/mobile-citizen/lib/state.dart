@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'push_bridge.dart';
+
 /// Citizen access code of a test server reachable from outside the office (--dart-define=ACCESS_CODE=...).
 const devAccessCode = String.fromEnvironment('ACCESS_CODE');
 
@@ -138,6 +140,7 @@ class CitizenState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await _stopPush();
     await auth?.signOut();
     needsSignIn = auth != null;
     myReports = [];
@@ -177,7 +180,31 @@ class CitizenState extends ChangeNotifier {
         } on ApiException catch (_) {}
       }
     }
+    if (!offline && !needsSignIn && !needsAccessCode) await _startPush();
     notifyListeners();
+  }
+
+  bool _pushOn = false;
+
+  /// Notifications while the app is closed (own push service); retried on each sync until it is running.
+  Future<void> _startPush() async {
+    if (_pushOn) return;
+    try {
+      final topic = await api.registerPush();
+      _pushOn = await PushBridge.start(url: api.pushPollUrl, topic: topic, ongoing: 'آماده دریافت هشدارهای منطقه شما');
+    } on ApiException {
+      // offline or an older server: tried again on the next sync
+    }
+  }
+
+  Future<void> _stopPush() async {
+    _pushOn = false;
+    await PushBridge.stop();
+    try {
+      await api.unregisterPush();
+    } on ApiException {
+      // offline: the server drops the topic when the session ends anyway
+    }
   }
 
   Future<void> refreshAlerts([GeoLocation? at]) async {

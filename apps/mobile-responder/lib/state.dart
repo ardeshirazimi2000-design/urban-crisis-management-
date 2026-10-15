@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'push_bridge.dart';
+
 const _lifecycle = ['proposed', 'assigned', 'acknowledged', 'en_route', 'on_scene', 'completed'];
 
 /// Responder state. Missions are cached encrypted on the device; status changes and positions are queued
@@ -95,6 +97,7 @@ class ResponderState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await _stopPush();
     await auth?.signOut();
     await writeToken(null);
     await writePref('access_code', null);
@@ -115,7 +118,31 @@ class ResponderState extends ChangeNotifier {
       offline = e.isNetwork;
       if (e.isUnauthenticated) signedIn = auth != null && await auth!.signedIn;
     }
+    if (signedIn && !offline) await _startPush();
     notifyListeners();
+  }
+
+  bool _pushOn = false;
+
+  /// Notifications while the app is closed (own push service); retried on each sync until it is running.
+  Future<void> _startPush() async {
+    if (_pushOn) return;
+    try {
+      final topic = await api.registerPush();
+      _pushOn = await PushBridge.start(url: api.pushPollUrl, topic: topic, ongoing: 'آماده دریافت مأموریت‌ها');
+    } on ApiException {
+      // offline or an older server: tried again on the next sync
+    }
+  }
+
+  Future<void> _stopPush() async {
+    _pushOn = false;
+    await PushBridge.stop();
+    try {
+      await api.unregisterPush();
+    } on ApiException {
+      // offline: the server drops the topic when the session ends anyway
+    }
   }
 
   Future<List<Assignment>> _fetchAssignments() async {
