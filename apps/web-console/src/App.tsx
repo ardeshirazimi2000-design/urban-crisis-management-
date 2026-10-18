@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { PageErrorBoundary } from "./components/ErrorBoundary";
 import { useSession } from "./lib/session";
 import { t } from "./lib/format";
-import { NAV_ICONS } from "./components/icons";
+import { SideNav } from "./components/SideNav";
 import { Brand } from "./components/Brand";
 import { LogOut } from "lucide-react";
 import { AccessHistoryBanner, LoginPage } from "./pages/Login";
@@ -60,16 +60,7 @@ export function App() {
     <div className="shell">
       <aside className="side">
         <Brand />
-        <nav>
-          {nav.map((n) => {
-            const Icon = NAV_ICONS[n.to];
-            return (
-              <NavLink key={n.to} to={n.to} end={n.to === "/"}>
-                {Icon && <Icon size={18} strokeWidth={1.75} aria-hidden="true" />}{n.label}
-              </NavLink>
-            );
-          })}
-        </nav>
+        <SideNav items={nav} />
         <div className="side-foot">
           <div>{me.display_name || me.subject}</div>
           <div className="muted small">{me.roles.map(t).join("، ")}</div>

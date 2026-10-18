@@ -26,8 +26,21 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin: 0; } h3 { font-size: 14px;
 .brand-lg .brand-mark { width: 96px; height: 96px; }
 .brand-lg .brand-name { font-size: 28px; } .brand-lg .brand-slogan { font-size: 14px; }
 .side nav { display: flex; flex-direction: column; gap: 4px; }
-.side nav a { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.side nav a { padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 10px; }
 .side nav a svg { color: var(--muted); flex: none; } .side nav a.active svg { color: var(--primary); }
+.side nav a:hover { background: var(--sel); }
+.nav-group { display: flex; flex-direction: column; }
+.nav-group-head { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; font-weight: 700; color: var(--text); }
+.nav-group-head:hover { background: var(--sel); }
+.nav-group-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.nav-group-head svg { color: var(--muted); flex: none; }
+.nav-group.current > .nav-group-head svg:first-child { color: var(--primary); }
+.nav-group-head span { flex: 1; }
+.nav-chevron { transition: transform .15s; }
+.nav-group.open .nav-chevron { transform: rotate(180deg); }
+.nav-group-items { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px; padding-inline-start: 14px;
+  border-inline-start: 2px solid var(--border); margin-inline-start: 18px; }
 .side nav a.active { background: var(--sel); color: var(--primary); font-weight: 700; }
 .side-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .side-foot .btn { align-self: stretch; }
@@ -85,7 +98,7 @@ textarea { width: 100%; }
 .preview blockquote { margin: 0; padding: 12px; background: var(--bg); border-inline-start: 4px solid var(--primary); border-radius: 6px; font-size: 15px; }
 .popup { font-family: "Vazirmatn", Tahoma, sans-serif; }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; } .side nav { flex-direction: row; flex-wrap: wrap; }
+  .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; }
   .split { grid-template-columns: 1fr; } .main { padding: 12px; } .kv { grid-template-columns: 1fr; }
   .table { display: block; overflow-x: auto; }
 }
