@@ -856,6 +856,13 @@ paths:
       x-permission: audit:configure
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [before, reason], properties: {before: {type: string}, reason: {type: string}}}}}}
       responses: {"200": {description: archive file}, "409": {description: AUDIT_CHAIN_BROKEN}}
+  /api/v1/admin/audit/acknowledge-break:
+    post:
+      tags: [admin]
+      summary: "The security auditor accepts the current audit-chain break after examining it; the record's hash is pinned so a later change is detected again"
+      x-permission: audit:configure
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [seq, reason], properties: {seq: {type: integer, format: int64}, reason: {type: string}}}}}}
+      responses: {"200": {description: "verification result after acknowledgement"}, "409": {description: NOT_CURRENT_BREAK | ALREADY_ACKNOWLEDGED}}
   /api/v1/admin/audit/status:
     get: {tags: [admin], summary: Audit capacity, archives and the last integrity check, x-permission: audit:read, responses: {"200": {description: status}}}
   /api/v1/admin/integrity/check:

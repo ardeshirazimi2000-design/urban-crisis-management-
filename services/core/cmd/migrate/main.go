@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/audit"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/guidance"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/identity"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
@@ -30,6 +31,8 @@ func main() {
 		os.Exit(1)
 	}
 	db.IntegrityKey = cfg.IntegrityKey
+	// Every process that writes audit records must sign them with the same key as the API.
+	audit.Configure(cfg.AuditKey, cfg.AuditFallback)
 	logx.Setup(cfg.LogLevel)
 	ctx := context.Background()
 	pool, err := db.ConnectRetry(ctx, cfg.DatabaseURL, 90*time.Second)

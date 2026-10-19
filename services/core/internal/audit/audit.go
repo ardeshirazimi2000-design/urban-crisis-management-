@@ -53,7 +53,7 @@ func hmacKey() []byte {
 	cfgMu.RLock()
 	defer cfgMu.RUnlock()
 	if len(key) == 0 {
-		return []byte("dev-only-audit-key-change-me-0123456789")
+		return []byte(devKey)
 	}
 	return key
 }
@@ -144,7 +144,9 @@ func canonicalJSON(v any) ([]byte, error) {
 	return json.Marshal(generic)
 }
 
-func computeHash(r Record) (string, error) {
+func computeHash(r Record) (string, error) { return hashWith(r, hmacKey()) }
+
+func hashWith(r Record, k []byte) (string, error) {
 	details, err := canonicalJSON(r.Details)
 	if err != nil {
 		return "", err
@@ -160,7 +162,7 @@ func computeHash(r Record) (string, error) {
 	}
 	h := sha256.New()
 	if r.HashAlg == algHMAC {
-		h = hmac.New(sha256.New, hmacKey())
+		h = hmac.New(sha256.New, k)
 		parts = append(parts, r.Severity, r.IP, r.Channel, r.UserAgent)
 	}
 	for _, part := range parts {
@@ -364,6 +366,27 @@ type VerifyResult struct {
 	Valid     bool   `json:"valid"`
 	BrokenSeq int64  `json:"broken_seq,omitempty"`
 	Problem   string `json:"problem,omitempty"`
+	// RowHash is the stored hash of the broken record (what an acknowledgement pins).
+	RowHash string `json:"row_hash,omitempty"`
+	// DevKey: the broken record verifies with the built-in development key, i.e. a process wrote it without
+	// the configured AUDIT_KEY — a configuration fault, not an edit of the record.
+	DevKey bool `json:"dev_key,omitempty"`
+	// Acknowledged counts breaks the security auditor examined and accepted (audit_acknowledged_breaks).
+	Acknowledged int `json:"acknowledged,omitempty"`
+}
+
+const devKey = "dev-only-audit-key-change-me-0123456789"
+
+// verifiesWithDevKey reports whether r was signed with the development key while a real key is configured.
+func verifiesWithDevKey(r Record) bool {
+	cfgMu.RLock()
+	configured := len(key) > 0 && string(key) != devKey
+	cfgMu.RUnlock()
+	if !configured || r.HashAlg != algHMAC {
+		return false
+	}
+	h, err := hashWith(r, []byte(devKey))
+	return err == nil && h == r.Hash
 }
 
 // Verify walks the whole chain (from the last archive anchor, if any) and recomputes every hash.
@@ -374,7 +397,36 @@ func Verify(ctx context.Context, pool *pgxpool.Pool) (VerifyResult, error) {
 	if err != nil && err != pgx.ErrNoRows {
 		return VerifyResult{}, err
 	}
+	type ack struct{ problem, hash string }
+	acks := map[int64]ack{}
+	ar, err := pool.Query(ctx, `SELECT seq, problem, row_hash FROM audit_acknowledged_breaks`)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	for ar.Next() {
+		var seq int64
+		var a ack
+		if err := ar.Scan(&seq, &a.problem, &a.hash); err != nil {
+			ar.Close()
+			return VerifyResult{}, err
+		}
+		acks[seq] = a
+	}
+	ar.Close()
 	res := VerifyResult{Valid: true}
+	// accepted: the record is an acknowledged break with exactly this problem and unchanged since.
+	accepted := func(r Record, problem string) bool {
+		a, ok := acks[r.Seq]
+		if ok && a.problem == problem && a.hash == r.Hash {
+			res.Acknowledged++
+			return true
+		}
+		return false
+	}
+	broken := func(r Record, problem string) VerifyResult {
+		return VerifyResult{Checked: res.Checked, BrokenSeq: r.Seq, Problem: problem, RowHash: r.Hash,
+			DevKey: problem == "hash_mismatch" && verifiesWithDevKey(r), Acknowledged: res.Acknowledged}
+	}
 	keyed := false
 	for {
 		rows, err := pool.Query(ctx, `SELECT `+selectCols+` FROM audit_log WHERE seq > $1 ORDER BY seq LIMIT 5000`, anchorSeq)
@@ -391,25 +443,25 @@ func Verify(ctx context.Context, pool *pgxpool.Pool) (VerifyResult, error) {
 			n++
 			res.Checked++
 			anchorSeq = r.Seq
-			if r.PrevHash != prev {
+			if r.PrevHash != prev && !accepted(r, "prev_hash_mismatch") {
 				rows.Close()
-				return VerifyResult{Checked: res.Checked, BrokenSeq: r.Seq, Problem: "prev_hash_mismatch"}, nil
+				return broken(r, "prev_hash_mismatch"), nil
 			}
 			// Unkeyed rows only exist before the upgrade; one after a keyed row is a forged downgrade.
 			if r.HashAlg == algHMAC {
 				keyed = true
-			} else if keyed {
+			} else if keyed && !accepted(r, "unkeyed_after_keyed") {
 				rows.Close()
-				return VerifyResult{Checked: res.Checked, BrokenSeq: r.Seq, Problem: "unkeyed_after_keyed"}, nil
+				return broken(r, "unkeyed_after_keyed"), nil
 			}
 			h, err := computeHash(r)
 			if err != nil {
 				rows.Close()
 				return res, err
 			}
-			if h != r.Hash {
+			if h != r.Hash && !accepted(r, "hash_mismatch") {
 				rows.Close()
-				return VerifyResult{Checked: res.Checked, BrokenSeq: r.Seq, Problem: "hash_mismatch"}, nil
+				return broken(r, "hash_mismatch"), nil
 			}
 			prev = r.Hash
 		}

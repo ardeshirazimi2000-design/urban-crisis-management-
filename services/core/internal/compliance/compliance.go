@@ -45,6 +45,7 @@ type Module struct {
 func (m *Module) Routes(r *httpx.Router) {
 	r.Auth("GET /admin/audit/export", m.auditExport)
 	r.Auth("POST /admin/audit/archive", m.auditArchive)
+	r.Auth("POST /admin/audit/acknowledge-break", m.acknowledgeBreak)
 	r.Auth("GET /admin/audit/status", m.auditStatus)
 	r.Auth("POST /admin/integrity/check", m.integrityCheck)
 	r.Auth("GET /admin/export/incidents", m.exportIncidents)
@@ -146,10 +147,22 @@ func (m *Module) CheckIntegrity(ctx context.Context, actor *uuid.UUID) (Integrit
 		m.Notify(ctx, "integrity", "critical", fmt.Sprintf("تغییر غیرمجاز در %d رکورد حادثه/هشدار تشخیص داده شد", len(res.Violations)),
 			map[string]any{"violations": res.Violations})
 	}
+	// A break is reported (audit record, notification, SMS) once, not on every hourly check.
+	var reported bool
 	if !chain.Valid {
+		if err := m.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM security_notifications WHERE kind='audit'
+			AND details->>'seq' = $1 AND details->>'problem' = $2)`, strconv.FormatInt(chain.BrokenSeq, 10), chain.Problem).Scan(&reported); err != nil {
+			return res, err
+		}
+	}
+	if !chain.Valid && !reported {
 		_ = audit.WriteStandalone(ctx, m.Pool, audit.Entry{ActorID: actor, Action: "audit.chain_broken", TargetType: "audit_log",
-			TargetID: strconv.FormatInt(chain.BrokenSeq, 10), Outcome: "failed", Details: map[string]any{"problem": chain.Problem}})
-		m.Notify(ctx, "audit", "critical", "زنجیره ممیزی دستکاری شده است", map[string]any{"seq": chain.BrokenSeq, "problem": chain.Problem})
+			TargetID: strconv.FormatInt(chain.BrokenSeq, 10), Outcome: "failed", Details: map[string]any{"problem": chain.Problem, "dev_key": chain.DevKey}})
+		msg := "زنجیره ممیزی دستکاری شده است"
+		if chain.DevKey {
+			msg = "گسست زنجیره ممیزی: رکورد با کلید پیش‌فرض امضا شده (خطای پیکربندی سرویس، نه تغییر رکورد)"
+		}
+		m.Notify(ctx, "audit", "critical", msg, map[string]any{"seq": strconv.FormatInt(chain.BrokenSeq, 10), "problem": chain.Problem, "dev_key": chain.DevKey})
 	}
 	_ = audit.WriteStandalone(ctx, m.Pool, audit.Entry{ActorID: actor, Action: "integrity.check", TargetType: "system",
 		Outcome: map[bool]string{true: "success", false: "failed"}[len(res.Violations) == 0 && chain.Valid],
@@ -365,6 +378,58 @@ func (m *Module) auditExport(w http.ResponseWriter, r *http.Request) error {
 
 // auditArchive removes the oldest part of the trail after handing it to the auditor as a file. The chain
 // continues from a recorded anchor, so Verify still covers what remains.
+// acknowledgeBreak lets the security auditor accept the current break in the audit chain after examining it
+// (e.g. a record a background service signed without the configured key). The record's hash is pinned: if it is
+// changed later, verification fails again.
+func (m *Module) acknowledgeBreak(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	if err := m.Guard.Require(ctx, auth.AuditConfigure, "audit_log", ""); err != nil {
+		return err
+	}
+	p := auth.FromContext(ctx)
+	var req struct {
+		Seq    int64  `json:"seq"`
+		Reason string `json:"reason"`
+	}
+	if err := httpx.DecodeJSON(w, r, &req, 4<<10); err != nil {
+		return err
+	}
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Reason == "" {
+		return httpx.Validation(httpx.FieldDetail{Field: "reason", Reason: "required"})
+	}
+	chain, err := audit.Verify(ctx, m.Pool)
+	if err != nil {
+		return err
+	}
+	if chain.Valid || chain.BrokenSeq != req.Seq {
+		return httpx.Conflict("NOT_CURRENT_BREAK", "این رکورد گسست فعلی زنجیره ممیزی نیست")
+	}
+	err = db.WithTx(ctx, m.Pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO audit_acknowledged_breaks (seq, problem, row_hash, reason, acknowledged_by)
+			VALUES ($1,$2,$3,$4,$5)`, req.Seq, chain.Problem, chain.RowHash, req.Reason, p.UserID); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "audit.break_acknowledged",
+			TargetType: "audit_log", TargetID: strconv.FormatInt(req.Seq, 10), Outcome: "success", Reason: req.Reason,
+			Details: map[string]any{"problem": chain.Problem, "dev_key": chain.DevKey}})
+	})
+	if db.IsUniqueViolation(err, "audit_acknowledged_breaks_pkey") {
+		return httpx.Conflict("ALREADY_ACKNOWLEDGED", "این گسست قبلاً تأیید شده است")
+	}
+	if err != nil {
+		return err
+	}
+	m.Notify(ctx, "audit", "high", fmt.Sprintf("گسست زنجیره ممیزی در رکورد %d توسط ممیز امنیتی بررسی و تأیید شد", req.Seq),
+		map[string]any{"acknowledged_seq": req.Seq, "reason": req.Reason})
+	after, err := audit.Verify(ctx, m.Pool)
+	if err != nil {
+		return err
+	}
+	httpx.JSON(w, http.StatusOK, after)
+	return nil
+}
+
 func (m *Module) auditArchive(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	if err := m.Guard.Require(ctx, auth.AuditConfigure, "audit_log", ""); err != nil {

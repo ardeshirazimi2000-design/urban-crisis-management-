@@ -11,6 +11,7 @@ import (
 	_ "time/tzdata" // embedded zone data: Asia/Tehran without OS tzdata
 
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/app"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/audit"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/notification"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
@@ -24,6 +25,8 @@ func main() {
 		os.Exit(1)
 	}
 	db.IntegrityKey = cfg.IntegrityKey
+	// Every process that writes audit records must sign them with the same key as the API.
+	audit.Configure(cfg.AuditKey, cfg.AuditFallback)
 	logx.Setup(cfg.LogLevel)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

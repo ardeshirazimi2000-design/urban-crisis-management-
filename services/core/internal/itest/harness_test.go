@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 	for k, v := range map[string]string{"APP_ENV": "test", "AUTH_MODE": "dev", "DEV_JWT_SECRET": devSecret,
 		"MEDIA_URL_SECRET": "integration-media-secret-0123456789abcdef", "MEDIA_ALLOW_UNSCANNED": "true",
 		"RATE_REPORT_PER_MIN": "100000", "RATE_REPORT_BURST": "100000", "RATE_DEFAULT_PER_MIN": "1000000", "RATE_DEFAULT_BURST": "100000",
-		"PRINCIPAL_CACHE_TTL": "1ms"} {
+		"PRINCIPAL_CACHE_TTL": "1ms", "AUDIT_KEY": "integration-audit-key-0123456789abcdef"} {
 		os.Setenv(k, v)
 	}
 	cfg, err = config.Load()

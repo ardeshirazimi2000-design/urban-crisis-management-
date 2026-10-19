@@ -11,7 +11,33 @@ type AuditRow = {
   details: Record<string, unknown>;
 };
 type Notification = { id: number; kind: string; severity: string; message: string; created_at: string };
-type IntegrityResult = { checked: number; violations: { record_type: string; record_id: string; reason: string }[]; AuditChain: { checked: number; valid: boolean; broken_seq?: number; problem?: string }; at: string };
+type ChainResult = { checked: number; valid: boolean; broken_seq?: number; problem?: string; dev_key?: boolean; acknowledged?: number };
+type IntegrityResult = { checked: number; violations: { record_type: string; record_id: string; reason: string }[]; AuditChain: ChainResult; at: string };
+
+const PROBLEMS: Record<string, string> = {
+  hash_mismatch: "محتوای رکورد با امضای آن نمی‌خواند",
+  prev_hash_mismatch: "پیوند رکورد با رکورد قبلی قطع است",
+  unkeyed_after_keyed: "رکورد بدون کلید پس از رکوردهای کلیددار",
+};
+
+/** Verification outcome; for a break, its likely cause and (security auditor only) the acknowledgement. */
+function ChainStatus({ r, onChange }: { r: ChainResult; onChange?: (r: ChainResult) => void }) {
+  const { can } = useSession();
+  if (r.valid) {
+    return <div className="banner info">زنجیره ممیزی سالم است ({num(r.checked)} رکورد{r.acknowledged ? `؛ ${num(r.acknowledged)} گسست بررسی‌شده` : ""}).</div>;
+  }
+  return (
+    <div className="banner warn">
+      <div><b>گسست زنجیره ممیزی در رکورد {num(r.broken_seq ?? 0)}:</b> {PROBLEMS[r.problem ?? ""] ?? r.problem}.</div>
+      {r.dev_key && <div>این رکورد با کلید پیش‌فرض امضا شده است؛ یعنی یکی از سرویس‌ها کلید ممیزی (AUDIT_KEY) را بارگذاری نکرده بود. این خطای پیکربندی است، نه تغییر رکورد.</div>}
+      {can("audit:configure") && onChange && (
+        <ReasonAction label="تأیید بررسی این گسست" onSubmit={async (reason) => {
+          onChange(await api<ChainResult>("POST", "/admin/audit/acknowledge-break", { body: { seq: r.broken_seq, reason } }));
+        }} />
+      )}
+    </div>
+  );
+}
 type AuditStatus = {
   rows: number; warn_rows: number; max_rows: number; full_action: string; blocking: boolean; last_integrity_check: IntegrityResult | null;
   archives: { id: number; first_seq: number; last_seq: number; row_count: number; digest: string; archived_by: string | null; created_at: string }[] | null;
@@ -121,7 +147,7 @@ function IntegritySummary({ r }: { r: IntegrityResult }) {
   return (
     <div className={ok ? "banner info" : "banner warn"}>
       {fmtTime(r.at)}: {num(r.checked)} رکورد بررسی شد؛ {r.violations.length ? `${num(r.violations.length)} مورد تغییر غیرمجاز` : "بدون تغییر غیرمجاز"}.
-      زنجیره ممیزی: {r.AuditChain.valid ? `سالم (${num(r.AuditChain.checked)} رکورد)` : `گسست در رکورد ${r.AuditChain.broken_seq} (${r.AuditChain.problem})`}
+      زنجیره ممیزی: {r.AuditChain.valid ? `سالم (${num(r.AuditChain.checked)} رکورد)` : `گسست در رکورد ${r.AuditChain.broken_seq} (${PROBLEMS[r.AuditChain.problem ?? ""] ?? r.AuditChain.problem})`}
       {r.violations.length > 0 && <ul>{r.violations.slice(0, 20).map((v) => <li key={v.record_id} dir="ltr">{v.record_type}:{v.record_id} ({v.reason})</li>)}</ul>}
     </div>
   );
@@ -169,7 +195,7 @@ function Audit() {
   const [f, setF] = useState({ outcome: "", severity: "", action: "", ip: "", from: "", to: "", sort: "desc" });
   const rows = usePoll(() => api<{ items: AuditRow[] }>("GET", "/admin/audit", { query: { ...f, limit: 200 } }), 15000, [JSON.stringify(f)]);
   const verify = useAction();
-  const [result, setResult] = useState<{ checked: number; valid: boolean; broken_seq?: number; problem?: string } | null>(null);
+  const [result, setResult] = useState<ChainResult | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const exportAs = (format: string) => void verify.run(async () => {
     const file = await download("GET", "/admin/audit/export", { query: { format, from: f.from, to: f.to, action: f.action, severity: f.severity, outcome: f.outcome } });
@@ -182,8 +208,7 @@ function Audit() {
       <button className="btn small" onClick={() => exportAs("csv")}>خروجی CSV</button>
       <button className="btn small" onClick={() => exportAs("json")}>خروجی JSON</button>
     </>}>
-      {result && <div className={result.valid ? "banner info" : "banner warn"}>
-        {result.valid ? `زنجیره سالم است (${num(result.checked)} رکورد)` : `گسست در رکورد ${result.broken_seq}: ${result.problem}`}</div>}
+      {result && <ChainStatus r={result} onChange={setResult} />}
       <ErrorBox error={verify.error ?? rows.error} />
       <div className="row gap wrap filters">
         <label>نتیجه<select value={f.outcome} onChange={(e) => set("outcome", e.target.value)}>

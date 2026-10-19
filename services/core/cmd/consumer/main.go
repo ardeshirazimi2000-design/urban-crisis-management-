@@ -12,6 +12,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/audit"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/inbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/config"
@@ -27,6 +28,8 @@ func main() {
 		os.Exit(1)
 	}
 	db.IntegrityKey = cfg.IntegrityKey
+	// Every process that writes audit records must sign them with the same key as the API.
+	audit.Configure(cfg.AuditKey, cfg.AuditFallback)
 	logx.Setup(cfg.LogLevel)
 	if len(cfg.KafkaBrokers) == 0 {
 		slog.Error("KAFKA_BROKERS is required")
