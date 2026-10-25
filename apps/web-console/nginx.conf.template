@@ -5,8 +5,9 @@ server {
   listen 8080;
   server_tokens off;
   root /usr/share/nginx/html;
-  # Docker's embedded DNS: the tile upstream is resolved per request, so nginx starts even without Internet.
-  resolver 127.0.0.11 valid=300s ipv6=off;
+  # Docker's embedded DNS, re-asked every 10 s: the API and tile upstreams are resolved at request time, so nginx
+  # follows a recreated API container (new address after an update) and starts even without Internet.
+  resolver 127.0.0.11 valid=10s ipv6=off;
   add_header X-Content-Type-Options nosniff always;
   add_header X-Frame-Options DENY always;
   add_header Referrer-Policy no-referrer always;
@@ -14,7 +15,8 @@ server {
 
   # Same-origin API through the gateway (avoids CORS and token leakage to third parties).
   location /api/ {
-    proxy_pass http://api:8080;
+    set $api_upstream http://api:8080;
+    proxy_pass $api_upstream;
     # Appended (not replaced): the API trusts only the entries its TRUSTED_PROXY_HOPS proxies added.
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
