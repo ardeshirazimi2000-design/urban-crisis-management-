@@ -99,13 +99,17 @@ function Users({ local }: { local: boolean }) {
   );
 }
 
-function RoleFields({ value, onChange }: { value: { role: string; scope: string; until: string }; onChange: (v: { role: string; scope: string; until: string }) => void }) {
+/** Roles an account may hold: app-only accounts take an app role (responder or citizen); console accounts a staff role. */
+const rolesFor = (console: boolean, app: boolean) => (!console && app ? ["RESPONDER", "CITIZEN"] : STAFF_ROLES);
+
+function RoleFields({ value, onChange, roles = STAFF_ROLES }: { value: { role: string; scope: string; until: string }; onChange: (v: { role: string; scope: string; until: string }) => void; roles?: string[] }) {
   const { orgs } = useSession();
+  const citizen = value.role === "CITIZEN";
   return (
     <div className="row gap wrap">
-      <label>نقش<select value={value.role} onChange={(e) => onChange({ ...value, role: e.target.value })}>{STAFF_ROLES.map((r) => <option key={r} value={r}>{t(r)}</option>)}</select></label>
-      <label>دامنه سازمانی<select value={value.scope} onChange={(e) => onChange({ ...value, scope: e.target.value })}>
-        <option value="">همه سازمان‌ها</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+      <label>نقش<select value={value.role} onChange={(e) => onChange({ ...value, role: e.target.value, scope: e.target.value === "CITIZEN" ? "" : value.scope })}>{roles.map((r) => <option key={r} value={r}>{t(r)}</option>)}</select></label>
+      {!citizen && <label>دامنه سازمانی<select value={value.scope} onChange={(e) => onChange({ ...value, scope: e.target.value })}>
+        <option value="">همه سازمان‌ها</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
       <label>اعتبار تا (اختیاری)<input type="date" dir="ltr" value={value.until} onChange={(e) => onChange({ ...value, until: e.target.value })} /></label>
     </div>
   );
@@ -120,7 +124,14 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
   const { busy, error, run } = useAction();
   const [f, setF] = useState({ national_code: "", mobile: "", first_name: "", last_name: "", position_title: "", username: "", console_access: true, app_access: false, allowed_cidrs: "" });
   const [role, setRole] = useState({ role: "OPERATOR", scope: "", until: "" });
-  const set = (k: string, v: unknown) => setF({ ...f, [k]: v });
+  const set = (k: string, v: unknown) => {
+    const next = { ...f, [k]: v };
+    setF(next);
+    // Keep the role valid for the chosen access: app-only → responder/citizen; console → a staff role.
+    const allowed = rolesFor(next.console_access, next.app_access);
+    if (!allowed.includes(role.role)) setRole({ ...role, role: allowed[0], scope: "" });
+  };
+  const roles = rolesFor(f.console_access, f.app_access);
   return (
     <form className="card subtle stack" onSubmit={(e) => {
       e.preventDefault();
@@ -145,7 +156,8 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
         {f.console_access && <label>نام کاربری<input dir="ltr" required value={f.username} onChange={(e) => set("username", e.target.value)} /></label>}
         {f.console_access && <label>شبکه‌های مجاز کنسول (اختیاری)<input dir="ltr" placeholder="192.168.1.0/24" value={f.allowed_cidrs} onChange={(e) => set("allowed_cidrs", e.target.value)} /></label>}
       </div>
-      <RoleFields value={role} onChange={setRole} />
+      <RoleFields value={role} onChange={setRole} roles={roles} />
+      {!f.console_access && f.app_access && <p className="muted small">کاربری که فقط دسترسی اپلیکیشن دارد، امدادگر یا شهروند است. شهروندان معمولاً خودشان از اپ ثبت‌نام می‌کنند؛ تعریف شهروند در این‌جا برای مواردی مثل داوطلبان ثبت‌شده است.</p>}
       <div className="row gap">
         <button className="btn primary" disabled={busy}>{busy ? "استعلام شاهکار…" : "استعلام شاهکار و تعریف"}</button>
         <button type="button" className="btn ghost" onClick={onClose}>انصراف</button>

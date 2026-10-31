@@ -54,8 +54,10 @@ type roleReq struct {
 }
 
 // validRole checks a staff role assignment. Citizens are not assigned through the console.
-func validRole(v *httpx.Validator, rr *roleReq) {
-	v.Check(auth.IsKnownRole(rr.Role) && rr.Role != string(auth.RoleCitizen), "role.role", "unknown")
+// validRole checks a staff role; a citizen account is only ever created as such (allowCitizen), never granted later.
+func validRole(v *httpx.Validator, rr *roleReq, allowCitizen ...bool) {
+	citizenOK := len(allowCitizen) > 0 && allowCitizen[0]
+	v.Check(auth.IsKnownRole(rr.Role) && (citizenOK || rr.Role != string(auth.RoleCitizen)), "role.role", "unknown")
 	v.Check(rr.ExpiresAt == nil || rr.ExpiresAt.After(time.Now()), "role.expires_at", "in_past")
 }
 
@@ -137,7 +139,14 @@ func (m *Module) createUser(w http.ResponseWriter, r *http.Request) error {
 	for _, c := range req.AllowedCIDRs {
 		v.Check(security.ValidCIDR(c), "allowed_cidrs", "invalid")
 	}
-	validRole(&v, &req.Role)
+	validRole(&v, &req.Role, true)
+	citizen := req.Role.Role == string(auth.RoleCitizen)
+	if citizen {
+		// A citizen registered by the administrator (e.g. a volunteer): app only, no organisation scope.
+		v.Check(!req.ConsoleAccess, "console_access", "citizens_have_no_console")
+		v.Check(req.AppAccess, "app_access", "citizen_needs_app")
+		v.Check(req.Role.ScopeOrgID == nil, "role.scope_org_id", "citizen_has_no_scope")
+	}
 	if req.AppAccess && !req.ConsoleAccess {
 		v.Check(slices.Contains(auth.AppRoles, auth.Role(req.Role.Role)), "role.role", "app_only_user_needs_app_role")
 	}
@@ -169,8 +178,9 @@ func (m *Module) createUser(w http.ResponseWriter, r *http.Request) error {
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO users (id, subject_id, display_name, kind, national_code, mobile, first_name, last_name,
 			position_title, username, console_access, app_access, allowed_cidrs, shahkar_verified_at, created_by)
-			VALUES ($1,$2,$3,'staff',$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),$13)`, id, "local:"+id.String(), req.FirstName+" "+req.LastName,
-			nc, mobile, req.FirstName, req.LastName, strings.TrimSpace(req.PositionTitle), username, req.ConsoleAccess, req.AppAccess, cidrs, p.UserID); err != nil {
+			VALUES ($1,$2,$3,$14,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),$13)`, id, "local:"+id.String(), req.FirstName+" "+req.LastName,
+			nc, mobile, req.FirstName, req.LastName, strings.TrimSpace(req.PositionTitle), username, req.ConsoleAccess, req.AppAccess, cidrs, p.UserID,
+			map[bool]string{true: "citizen", false: "staff"}[citizen]); err != nil {
 			if db.IsUniqueViolation(err, "") {
 				return httpx.Conflict("DUPLICATE_USER", "کاربری با این کد ملی یا نام کاربری وجود دارد")
 			}

@@ -275,6 +275,27 @@ func TestUserAdministrationWithShahkar(t *testing.T) {
 	}
 	uid := created.User["id"].(string)
 
+	// App-only accounts need an app role; a citizen can be registered here (app only, no scope, no console).
+	appOnly := func(role string, console bool) map[string]any {
+		n, m := nationalCode(), mobile()
+		return map[string]any{"national_code": n, "mobile": m, "first_name": "سارا", "last_name": "نوری", "console_access": console,
+			"app_access": true, "username": map[bool]string{true: "snouri" + n[:4]}[console], "role": map[string]any{"role": role}}
+	}
+	if r := c.call("POST", "/admin/users", appOnly("OPERATOR", false)); r.Status != 422 || !strings.Contains(string(r.Body), "app_only_user_needs_app_role") {
+		t.Fatalf("operator without console: %d %s", r.Status, r.Body)
+	}
+	if r := c.call("POST", "/admin/users", appOnly("CITIZEN", true)); r.Status != 422 || !strings.Contains(string(r.Body), "citizens_have_no_console") {
+		t.Fatalf("citizen with console: %d %s", r.Status, r.Body)
+	}
+	var cit struct {
+		User              map[string]any `json:"user"`
+		TemporaryPassword string         `json:"temporary_password"`
+	}
+	c.must("POST", "/admin/users", appOnly("CITIZEN", false), 201, &cit)
+	if cit.User["kind"] != "citizen" || cit.TemporaryPassword != "" {
+		t.Fatalf("citizen account: %+v", cit)
+	}
+
 	// First sign-in with the temporary password: only changing it is allowed.
 	u, info := consoleLogin(t, body["username"].(string), created.TemporaryPassword, mob)
 	if info["password_change_required"] != true {

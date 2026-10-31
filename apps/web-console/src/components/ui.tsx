@@ -49,6 +49,25 @@ export function useAction() {
   return { busy, error, run, setError };
 }
 
+/** Persian wording for validation details the API returns as field + reason codes. */
+const REASONS: Record<string, string> = {
+  "role.role:app_only_user_needs_app_role": "کاربری که فقط دسترسی اپلیکیشن دارد باید نقش «امدادگر» یا «شهروند» داشته باشد. برای نقش‌های دیگر «دسترسی کنسول» را هم فعال کنید.",
+  "console_access:citizens_have_no_console": "شهروند دسترسی کنسول ندارد؛ تیک «دسترسی کنسول» را بردارید.",
+  "app_access:citizen_needs_app": "برای شهروند «دسترسی اپلیکیشن» را فعال کنید.",
+  "role.scope_org_id:citizen_has_no_scope": "شهروند دامنه سازمانی ندارد.",
+  "console_access:console_or_app_required": "دست‌کم یکی از «دسترسی کنسول» یا «دسترسی اپلیکیشن» را انتخاب کنید.",
+  "username:required_for_console": "برای دسترسی کنسول، نام کاربری لازم است.",
+  "username:invalid": "نام کاربری باید با حرف کوچک لاتین شروع شود و فقط حروف کوچک لاتین، رقم، نقطه، خط تیره و زیرخط داشته باشد (۴ تا ۳۲ نویسه).",
+  "national_code:invalid": "کد ملی معتبر نیست.",
+  "mobile:invalid": "شماره موبایل معتبر نیست.",
+  "first_name:required": "نام را وارد کنید.",
+  "last_name:required": "نام خانوادگی را وارد کنید.",
+  "reason:required": "دلیل را بنویسید.",
+  "allowed_cidrs:invalid": "شبکه مجاز باید به شکل 192.168.1.0/24 باشد.",
+  "role.expires_at:in_past": "تاریخ اعتبار نقش گذشته است.",
+  "role.role:unknown": "نقش انتخاب‌شده معتبر نیست.",
+};
+
 export function ErrorBox({ error }: { error: ApiError | null }) {
   if (!error) return null;
   return (
@@ -58,7 +77,7 @@ export function ErrorBox({ error }: { error: ApiError | null }) {
         <ul>
           {error.details.map((d, i) => (
             <li key={i}>
-              <code>{d.field}</code>: {d.reason}
+              {REASONS[`${d.field}:${d.reason}`] ?? <><code>{d.field}</code>: {d.reason}</>}
             </li>
           ))}
         </ul>
