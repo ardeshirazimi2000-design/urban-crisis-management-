@@ -20,6 +20,8 @@ type OutboxRow = { id: string; aggregate_type: string; aggregate_id: string; eve
 type Inquiry = { id: number; national_code: string; mobile: string; matched: boolean | null; provider_code: string | null; message: string | null; context: string; requested_by: string | null; created_at: string };
 
 export const STAFF_ROLES = ["RESPONDER", "OPERATOR", "COMMANDER", "RESOURCE_MANAGER", "GIS_ANALYST", "SECURITY_ADMIN", "SECURITY_AUDITOR"];
+/** Roles that may sign in to the mobile apps (the server's auth.AppRoles); citizens self-register in the app. */
+const APP_STAFF_ROLES = ["RESPONDER"];
 
 export function AdminPage() {
   const { can } = useSession();
@@ -99,11 +101,12 @@ function Users({ local }: { local: boolean }) {
   );
 }
 
-function RoleFields({ value, onChange }: { value: { role: string; scope: string; until: string }; onChange: (v: { role: string; scope: string; until: string }) => void }) {
+function RoleFields({ value, onChange, appOnly }: { value: { role: string; scope: string; until: string }; onChange: (v: { role: string; scope: string; until: string }) => void; appOnly?: boolean }) {
   const { orgs } = useSession();
+  const roles = appOnly ? APP_STAFF_ROLES : STAFF_ROLES;
   return (
     <div className="row gap wrap">
-      <label>نقش<select value={value.role} onChange={(e) => onChange({ ...value, role: e.target.value })}>{STAFF_ROLES.map((r) => <option key={r} value={r}>{t(r)}</option>)}</select></label>
+      <label>نقش<select value={value.role} onChange={(e) => onChange({ ...value, role: e.target.value })}>{roles.map((r) => <option key={r} value={r}>{t(r)}</option>)}</select></label>
       <label>دامنه سازمانی<select value={value.scope} onChange={(e) => onChange({ ...value, scope: e.target.value })}>
         <option value="">همه سازمان‌ها</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
       <label>اعتبار تا (اختیاری)<input type="date" dir="ltr" value={value.until} onChange={(e) => onChange({ ...value, until: e.target.value })} /></label>
@@ -120,7 +123,13 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
   const { busy, error, run } = useAction();
   const [f, setF] = useState({ national_code: "", mobile: "", first_name: "", last_name: "", position_title: "", username: "", console_access: true, app_access: false, allowed_cidrs: "" });
   const [role, setRole] = useState({ role: "OPERATOR", scope: "", until: "" });
-  const set = (k: string, v: unknown) => setF({ ...f, [k]: v });
+  const set = (k: string, v: unknown) => {
+    const next = { ...f, [k]: v };
+    setF(next);
+    // App-only accounts can hold only an app role; switch so the form never offers an invalid pair.
+    if (next.app_access && !next.console_access && !APP_STAFF_ROLES.includes(role.role)) setRole({ ...role, role: APP_STAFF_ROLES[0] });
+  };
+  const appOnly = f.app_access && !f.console_access;
   return (
     <form className="card subtle stack" onSubmit={(e) => {
       e.preventDefault();
@@ -132,6 +141,8 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
       });
     }}>
       <h3>تعریف کاربر (پس از تطابق شاهکار)</h3>
+      <p className="muted small">این‌جا فقط کارکنان تعریف می‌شوند. <b>شهروندان</b> نیازی به تعریف ندارند: خودشان در اپ شهروند با کد ملی و موبایل
+        (تطابق شاهکار و کد پیامکی) ثبت‌نام می‌کنند. برای امدادگری که فقط با اپ کار می‌کند، فقط «دسترسی اپلیکیشن» را بزنید.</p>
       <div className="row gap wrap">
         <label>کد ملی<input dir="ltr" required value={f.national_code} onChange={(e) => set("national_code", e.target.value)} /></label>
         <label>موبایل<input dir="ltr" required value={f.mobile} onChange={(e) => set("mobile", e.target.value)} /></label>
@@ -145,7 +156,7 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
         {f.console_access && <label>نام کاربری<input dir="ltr" required value={f.username} onChange={(e) => set("username", e.target.value)} /></label>}
         {f.console_access && <label>شبکه‌های مجاز کنسول (اختیاری)<input dir="ltr" placeholder="192.168.1.0/24" value={f.allowed_cidrs} onChange={(e) => set("allowed_cidrs", e.target.value)} /></label>}
       </div>
-      <RoleFields value={role} onChange={setRole} />
+      <RoleFields value={role} onChange={setRole} appOnly={appOnly} />
       <div className="row gap">
         <button className="btn primary" disabled={busy}>{busy ? "استعلام شاهکار…" : "استعلام شاهکار و تعریف"}</button>
         <button type="button" className="btn ghost" onClick={onClose}>انصراف</button>
