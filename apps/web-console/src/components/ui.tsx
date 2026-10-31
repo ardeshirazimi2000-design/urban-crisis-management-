@@ -67,6 +67,21 @@ const REASONS: Record<string, string> = {
   "role.expires_at:in_past": "تاریخ اعتبار نقش گذشته است.",
   "role.role:unknown": "نقش انتخاب‌شده معتبر نیست.",
 };
+/** Persian wording for the API's field names and validation reasons; unknown ones are shown as sent. */
+const FIELD_FA: Record<string, string> = {
+  "role.role": "نقش", "role.expires_at": "اعتبار نقش", national_code: "کد ملی", mobile: "موبایل", first_name: "نام",
+  last_name: "نام خانوادگی", username: "نام کاربری", console_access: "نوع دسترسی", allowed_cidrs: "شبکه‌های مجاز", reason: "دلیل",
+  location: "موقعیت", quantity: "مقدار", version: "نسخه", description: "شرح", title: "عنوان", body: "متن", keywords: "کلیدواژه‌ها",
+};
+const REASON_FA: Record<string, string> = {
+  app_only_user_needs_app_role: "کاربری که فقط دسترسی اپلیکیشن دارد باید نقش «امدادگر» یا «شهروند» داشته باشد.",
+  console_or_app_required: "حداقل یکی از «دسترسی کنسول» یا «دسترسی اپلیکیشن» را انتخاب کنید.",
+  required_for_console: "برای دسترسی کنسول نام کاربری لازم است.",
+  required: "الزامی است.", invalid: "نامعتبر است.", unknown: "مجاز نیست.", in_past: "تاریخ گذشته است.",
+  too_long: "بیش از حد طولانی است.", not_allowed: "مجاز نیست.", outside_service_area: "خارج از محدوده خدمت است.",
+  exceeds_remaining: "بیشتر از مقدار باقی‌مانده است.",
+};
+const reasonFa = (r: string) => REASON_FA[r] ?? REASON_FA[r.split(":")[0]] ?? r;
 
 export function ErrorBox({ error }: { error: ApiError | null }) {
   if (!error) return null;
@@ -77,7 +92,7 @@ export function ErrorBox({ error }: { error: ApiError | null }) {
         <ul>
           {error.details.map((d, i) => (
             <li key={i}>
-              {REASONS[`${d.field}:${d.reason}`] ?? <><code>{d.field}</code>: {d.reason}</>}
+              {REASONS[`${d.field}:${d.reason}`] ?? <>{FIELD_FA[d.field] ?? <code>{d.field}</code>}: {reasonFa(d.reason)}</>}
             </li>
           ))}
         </ul>
