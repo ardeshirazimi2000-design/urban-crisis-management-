@@ -56,6 +56,10 @@ class QueuedOp {
 /// successful request was lost). Returning true marks the op done; false records a conflict for the user.
 typedef ConflictResolver = Future<bool> Function(QueuedOp op);
 
+/// Runs just before an operation is sent and returns the body to send, e.g. after uploading the files the
+/// operation refers to. An [ApiException] it throws is handled like the request's own failure.
+typedef OpPreparer = Future<Map<String, dynamic>> Function(QueuedOp op);
+
 class SyncReport {
   int sent = 0, rejected = 0, conflicts = 0;
   bool stoppedOffline = false;
@@ -75,11 +79,12 @@ class OfflineQueue {
   final EncryptedJsonStore store;
   final ApiClient api;
   final ConflictResolver? resolveConflict;
+  OpPreparer? prepare;
   final List<QueuedOp> _ops = [];
   final _changes = StreamController<List<QueuedOp>>.broadcast();
   Future<void>? _flushing;
 
-  OfflineQueue(this.store, this.api, {this.resolveConflict});
+  OfflineQueue(this.store, this.api, {this.resolveConflict, this.prepare});
 
   Stream<List<QueuedOp>> get changes => _changes.stream;
   List<QueuedOp> get all => List.unmodifiable(_ops);
@@ -103,6 +108,9 @@ class OfflineQueue {
 
   void _emit() => _changes.add(all);
 
+  /// Persists changes made to a queued operation's body (e.g. ids of files already uploaded).
+  Future<void> save() => _persist();
+
   Future<QueuedOp> enqueue({required String kind, required String method, required String path,
       required Map<String, dynamic> body, bool idempotent = true, DateTime? occurredAt}) async {
     final op = QueuedOp(id: 'mob-${_uuid.v4()}', kind: kind, method: method, path: path, body: body,
@@ -124,7 +132,8 @@ class OfflineQueue {
       for (final op in pending) {
         op.attempts++;
         try {
-          final res = await api.request(op.method, op.path, body: op.body, idempotencyKey: op.idempotent ? op.id : null);
+          final body = prepare == null ? op.body : await prepare!(op);
+          final res = await api.request(op.method, op.path, body: body, idempotencyKey: op.idempotent ? op.id : null);
           op
             ..state = OpState.done
             ..result = res is Map<String, dynamic> ? res : null

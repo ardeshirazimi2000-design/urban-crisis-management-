@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/foundation.dart';
 
+import 'photo.dart';
 import 'push_bridge.dart';
 
 const _lifecycle = ['proposed', 'assigned', 'acknowledged', 'en_route', 'on_scene', 'completed'];
@@ -38,7 +40,7 @@ class ResponderState extends ChangeNotifier {
       Future<void> Function(String, String?)? writePref})
       : readPref = readPref ?? _noPref,
         writePref = writePref ?? _noWrite {
-    queue = OfflineQueue(queueStore, api, resolveConflict: _alreadyApplied);
+    queue = OfflineQueue(queueStore, api, resolveConflict: _alreadyApplied, prepare: _uploadPhotos);
   }
 
   static Future<String?> _noPref(String _) async => null;
@@ -54,6 +56,7 @@ class ResponderState extends ChangeNotifier {
     }
     signedIn = auth != null ? await auth!.signedIn : await readToken() != null;
     notifyListeners();
+    unawaited(_cleanupPhotos());
     if (signedIn) await sync();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => signedIn ? sync() : null);
   }
@@ -195,7 +198,7 @@ class ResponderState extends ChangeNotifier {
   /// Rapid building assessment from the field; offline-safe and created exactly once like casualties.
   Future<void> assessBuilding({required GeoLocation at, required String tag, required String buildingUse,
       List<String> observations = const [], bool peopleTrapped = false, int? floors, String address = '', String notes = '',
-      String? incidentId}) async {
+      String? incidentId, List<FieldPhoto> photos = const []}) async {
     await queue.enqueue(kind: 'damage.assess', method: 'POST', path: '/damage-assessments', body: {
       'location': {'lat': at.lat, 'lng': at.lng},
       'tag': tag,
@@ -206,9 +209,71 @@ class ResponderState extends ChangeNotifier {
       if (address.trim().isNotEmpty) 'address_text': address.trim(),
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
       if (incidentId != null) 'incident_id': incidentId,
+      // Uploaded just before the assessment is sent (see _uploadPhotos); never sent to the server as such.
+      if (photos.isNotEmpty) '_photos': [for (final p in photos) p.toJson()],
     });
     notifyListeners();
     await sync();
+  }
+
+  /// Uploads an assessment's photos first, then sends the assessment with their ids. Each uploaded id is saved
+  /// at once, so after a lost connection only the remaining photos are sent; the server also recognises a
+  /// repeated upload by its client reference. A photo the server refuses, or whose file is gone, is noted and
+  /// skipped so the assessment itself is never lost.
+  Future<Map<String, dynamic>> _uploadPhotos(QueuedOp op) async {
+    final photos = (op.body['_photos'] as List?)?.cast<Map>();
+    if (photos == null) return op.body;
+    final ids = <String>[];
+    for (final p in photos) {
+      var id = p['media_id'] as String?;
+      if (id == null && p['error'] == null) {
+        final f = File(p['path'] as String);
+        if (!await f.exists()) {
+          p['error'] = 'فایل عکس روی گوشی پیدا نشد';
+          await queue.save();
+          continue;
+        }
+        try {
+          final res = await api.upload('/media', await f.readAsBytes(), 'image/jpeg',
+              query: FieldPhoto.uploadQuery(p, incidentId: op.body['incident_id'] as String?));
+          id = res['media_id'] as String;
+          p['media_id'] = id;
+        } on ApiException catch (e) {
+          if (e.isRetryable || e.isUnauthenticated) rethrow;
+          p['error'] = describeApiError(e);
+        }
+        await queue.save();
+      }
+      if (id != null) ids.add(id);
+    }
+    final body = Map<String, dynamic>.of(op.body)..remove('_photos');
+    if (ids.isNotEmpty) body['media_ids'] = ids;
+    return body;
+  }
+
+  /// Photo files of an assessment op, with how many were sent.
+  static (int sent, int total) photoProgress(QueuedOp op) {
+    final photos = (op.body['_photos'] as List?) ?? const [];
+    return (photos.where((p) => (p as Map)['media_id'] != null).length, photos.length);
+  }
+
+  Future<void> _cleanupPhotos() async {
+    final waiting = <String>{}, sentAt = <String, DateTime>{};
+    for (final op in queue.all) {
+      for (final p in ((op.body['_photos'] as List?) ?? const []).cast<Map>()) {
+        final path = p['path'] as String;
+        if (op.state == OpState.done) {
+          sentAt[path] = op.syncedAt ?? op.occurredAt;
+        } else {
+          waiting.add(path);
+        }
+      }
+    }
+    try {
+      await cleanupPhotos(waiting: waiting, sentAt: sentAt);
+    } on FileSystemException {
+      // best effort; tried again on the next start
+    }
   }
 
   List<QueuedOp> get assessments => queue.all.where((o) => o.kind == 'damage.assess').toList().reversed.toList();

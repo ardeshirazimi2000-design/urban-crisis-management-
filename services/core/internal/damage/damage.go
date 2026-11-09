@@ -19,6 +19,7 @@ import (
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/auth"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/gis"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/idempotency"
+	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/media"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/outbox"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/db"
 	"github.com/ardeshirazimi2000-design/urban-crisis-management-/services/core/internal/platform/httpx"
@@ -35,18 +36,22 @@ var Observations = []string{
 }
 
 type Request struct {
-	IncidentID        *uuid.UUID `json:"incident_id"`
-	Location          gis.Point  `json:"location"`
-	AddressText       string     `json:"address_text"`
-	BuildingUse       string     `json:"building_use"`
-	Floors            *int       `json:"floors"`
-	Tag               string     `json:"tag"`
-	Observations      []string   `json:"observations"`
-	PeopleTrapped     bool       `json:"people_trapped"`
-	OccupantsEstimate *int       `json:"occupants_estimate"`
-	Notes             string     `json:"notes"`
-	Supersedes        *uuid.UUID `json:"supersedes"` // re-inspection of a building already assessed
+	IncidentID        *uuid.UUID  `json:"incident_id"`
+	Location          gis.Point   `json:"location"`
+	AddressText       string      `json:"address_text"`
+	BuildingUse       string      `json:"building_use"`
+	Floors            *int        `json:"floors"`
+	Tag               string      `json:"tag"`
+	Observations      []string    `json:"observations"`
+	PeopleTrapped     bool        `json:"people_trapped"`
+	OccupantsEstimate *int        `json:"occupants_estimate"`
+	Notes             string      `json:"notes"`
+	Supersedes        *uuid.UUID  `json:"supersedes"` // re-inspection of a building already assessed
+	MediaIDs          []uuid.UUID `json:"media_ids"`  // geotagged photos uploaded first (POST /media)
 }
+
+// MaxPhotos per assessment.
+const MaxPhotos = 10
 
 func (req *Request) Validate(area gis.Area) error {
 	var v httpx.Validator
@@ -68,6 +73,12 @@ func (req *Request) Validate(area gis.Area) error {
 	v.Check(req.Tag != "green" || !slices.Contains(req.Observations, "collapse_total"), "tag", "inconsistent_with_collapse")
 	v.Check(req.OccupantsEstimate == nil || (*req.OccupantsEstimate >= 0 && *req.OccupantsEstimate <= 100000), "occupants_estimate", "out_of_range")
 	v.Check(utf8.RuneCountInString(req.Notes) <= 1000, "notes", "too_long")
+	v.Check(len(req.MediaIDs) <= MaxPhotos, "media_ids", "too_many")
+	ids := map[uuid.UUID]bool{}
+	for _, id := range req.MediaIDs {
+		v.Check(!ids[id], "media_ids", "duplicate_id")
+		ids[id] = true
+	}
 	return v.Err()
 }
 
@@ -84,28 +95,30 @@ func (m *Module) Routes(r *httpx.Router) {
 }
 
 type Assessment struct {
-	ID                uuid.UUID  `json:"id"`
-	IncidentID        *uuid.UUID `json:"incident_id"`
-	IncidentCode      *string    `json:"incident_code"`
-	Location          gis.Point  `json:"location"`
-	AddressText       string     `json:"address_text"`
-	BuildingUse       string     `json:"building_use"`
-	Floors            *int       `json:"floors"`
-	Tag               string     `json:"tag"`
-	Observations      []string   `json:"observations"`
-	PeopleTrapped     bool       `json:"people_trapped"`
-	OccupantsEstimate *int       `json:"occupants_estimate"`
-	Notes             string     `json:"notes"`
-	Supersedes        *uuid.UUID `json:"supersedes"`
-	SupersededAt      *time.Time `json:"superseded_at"`
-	ReportID          *uuid.UUID `json:"report_id"`
-	AssessorName      string     `json:"assessor_name"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                uuid.UUID     `json:"id"`
+	IncidentID        *uuid.UUID    `json:"incident_id"`
+	IncidentCode      *string       `json:"incident_code"`
+	Location          gis.Point     `json:"location"`
+	AddressText       string        `json:"address_text"`
+	BuildingUse       string        `json:"building_use"`
+	Floors            *int          `json:"floors"`
+	Tag               string        `json:"tag"`
+	Observations      []string      `json:"observations"`
+	PeopleTrapped     bool          `json:"people_trapped"`
+	OccupantsEstimate *int          `json:"occupants_estimate"`
+	Notes             string        `json:"notes"`
+	Supersedes        *uuid.UUID    `json:"supersedes"`
+	SupersededAt      *time.Time    `json:"superseded_at"`
+	ReportID          *uuid.UUID    `json:"report_id"`
+	AssessorName      string        `json:"assessor_name"`
+	PhotoCount        int           `json:"photo_count"`
+	CreatedAt         time.Time     `json:"created_at"`
+	Photos            []media.Media `json:"photos,omitempty"`
 }
 
 const cols = `d.id, d.incident_id, i.code, ST_Y(d.location::geometry), ST_X(d.location::geometry), d.address_text, d.building_use,
 	d.floors, d.tag, d.observations, d.people_trapped, d.occupants_estimate, d.notes, d.supersedes, d.superseded_at, d.report_id,
-	COALESCE(u.display_name, ''), d.created_at`
+	COALESCE(u.display_name, ''), (SELECT count(*) FROM report_media pm WHERE pm.assessment_id = d.id), d.created_at`
 
 const from = ` FROM damage_assessments d LEFT JOIN incidents i ON i.id = d.incident_id LEFT JOIN users u ON u.id = d.assessor_id`
 
@@ -113,7 +126,7 @@ func scan(row pgx.Row) (Assessment, error) {
 	var a Assessment
 	err := row.Scan(&a.ID, &a.IncidentID, &a.IncidentCode, &a.Location.Lat, &a.Location.Lng, &a.AddressText, &a.BuildingUse,
 		&a.Floors, &a.Tag, &a.Observations, &a.PeopleTrapped, &a.OccupantsEstimate, &a.Notes, &a.Supersedes, &a.SupersededAt,
-		&a.ReportID, &a.AssessorName, &a.CreatedAt)
+		&a.ReportID, &a.AssessorName, &a.PhotoCount, &a.CreatedAt)
 	return a, err
 }
 
@@ -205,6 +218,9 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) error {
 			req.Observations, req.PeopleTrapped, req.OccupantsEstimate, req.Notes, req.Supersedes, reportID, p.UserID); err != nil {
 			return err
 		}
+		if err := media.AttachToAssessment(ctx, tx, p.UserID, id, req.MediaIDs); err != nil {
+			return err
+		}
 		if req.IncidentID != nil {
 			if _, err := tx.Exec(ctx, `INSERT INTO incident_events (incident_id, event_type, actor_id, payload, correlation_id)
 				VALUES ($1,'building_assessed',$2,$3,$4)`, *req.IncidentID, p.UserID, map[string]any{"assessment_id": id, "tag": req.Tag,
@@ -221,7 +237,8 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) error {
 		}
 		if err := audit.Write(ctx, tx, audit.Entry{ActorID: &p.UserID, ActorRoles: p.RoleNames(), Action: "damage.assess",
 			TargetType: "damage_assessment", TargetID: id.String(), Outcome: "success",
-			Details:       map[string]any{"tag": req.Tag, "supersedes": req.Supersedes, "people_trapped": req.PeopleTrapped},
+			Details: map[string]any{"tag": req.Tag, "supersedes": req.Supersedes, "people_trapped": req.PeopleTrapped,
+				"photos": len(req.MediaIDs)},
 			CorrelationID: httpx.CorrelationID(ctx)}); err != nil {
 			return err
 		}
@@ -306,6 +323,9 @@ func (m *Module) get(w http.ResponseWriter, r *http.Request) error {
 	}
 	a, err := load(ctx, m.Pool, id)
 	if err != nil {
+		return err
+	}
+	if a.Photos, err = media.ListForAssessment(ctx, m.Pool, id); err != nil {
 		return err
 	}
 	// The building's full chain: earlier inspections this one replaced, and any later one that replaced it.

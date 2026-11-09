@@ -14,4 +14,5 @@ abstract final class AppIcons {
   static const IconData warningAmber = LucideIcons.triangleAlert;
   static const IconData wifiOff = LucideIcons.wifiOff;
   static const IconData mission = LucideIcons.siren;
+  static const IconData camera = LucideIcons.camera;
 }

@@ -31,6 +31,13 @@ class ApiException implements Exception {
 
 typedef TokenProvider = Future<String?> Function();
 
+/// A file sent as the request body.
+class RawBody {
+  final List<int> bytes;
+  final String contentType;
+  const RawBody(this.bytes, this.contentType);
+}
+
 class ApiClient {
   final Uri baseUrl;
   final TokenProvider token;
@@ -44,30 +51,38 @@ class ApiClient {
       : _http = client ?? http.Client();
 
   Future<dynamic> request(String method, String path,
-      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true}) async {
+      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true, RawBody? raw}) async {
     try {
-      return await _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth);
+      return await _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth, raw: raw);
     } on ApiException catch (e) {
       if (e.code == 'UNAUTHENTICATED' && auth && refresh != null && !path.startsWith('/auth/') && await refresh!()) {
-        return _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth);
+        return _send(method, path, body: body, idempotencyKey: idempotencyKey, query: query, auth: auth, raw: raw);
       }
       rethrow;
     }
   }
 
+  /// Sends a file as the raw request body (POST /media); [query] carries its metadata. Uploads get a longer
+  /// timeout than JSON calls because field networks are slow.
+  Future<Map<String, dynamic>> upload(String path, List<int> bytes, String contentType, {Map<String, String>? query}) async =>
+      await request('POST', path, query: query, raw: RawBody(bytes, contentType)) as Map<String, dynamic>;
+
   Future<dynamic> _send(String method, String path,
-      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true}) async {
+      {Object? body, String? idempotencyKey, Map<String, String>? query, bool auth = true, RawBody? raw}) async {
     final uri = baseUrl.replace(path: '${baseUrl.path}$path', queryParameters: query);
     final headers = <String, String>{'X-Correlation-ID': _uuid.v4(), 'Accept': 'application/json'};
     final t = auth ? await token() : null;
     if (t != null) headers['Authorization'] = 'Bearer $t';
     if (body != null) headers['Content-Type'] = 'application/json';
+    if (raw != null) headers['Content-Type'] = raw.contentType;
     if (idempotencyKey != null) headers['Idempotency-Key'] = idempotencyKey;
     final req = http.Request(method, uri)..headers.addAll(headers);
     if (body != null) req.body = jsonEncode(body);
+    if (raw != null) req.bodyBytes = raw.bytes;
     http.Response res;
     try {
-      res = await http.Response.fromStream(await _http.send(req).timeout(timeout));
+      final wait = raw == null ? timeout : timeout * 6;
+      res = await http.Response.fromStream(await _http.send(req).timeout(wait));
     } catch (_) {
       throw ApiException(0, 'NETWORK', 'ارتباط با سرور برقرار نیست', correlationId: headers['X-Correlation-ID']!);
     }

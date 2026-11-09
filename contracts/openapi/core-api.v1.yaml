@@ -143,15 +143,26 @@ paths:
   /api/v1/media:
     post:
       tags: [media]
-      summary: Upload a file as the raw body. Declared Content-Type must match the sniffed type (jpeg, png, webp, mp4).
+      summary: >-
+        Upload a file as the raw body. Declared Content-Type must match the sniffed type (jpeg, png, webp, mp4).
+        JPEG and PNG are rebuilt from their pixels before storage (hidden payloads and EXIF are dropped; scan_status clean).
+        Field photos add where and when they were taken; client_ref makes a retried upload return the first record (200).
       x-permission: report:create
+      parameters:
+        - {name: client_ref, in: query, schema: {type: string, pattern: "^[A-Za-z0-9_.:-]{8,128}$"}}
+        - {name: lat, in: query, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: lng, in: query, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: alt, in: query, description: altitude in metres, schema: {type: number}}
+        - {name: acc, in: query, description: GPS accuracy in metres, schema: {type: number, minimum: 0}}
+        - {name: captured_at, in: query, description: "RFC 3339; at most 10 minutes ahead, 30 days back", schema: {type: string, format: date-time}}
+        - {name: incident_id, in: query, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {image/jpeg: {}, image/png: {}, image/webp: {}, video/mp4: {}}}
-      responses: {"201": {description: stored privately}, "413": {$ref: "#/components/responses/Error"}, "415": {$ref: "#/components/responses/Error"}}
+      responses: {"201": {description: stored privately}, "200": {description: same client_ref and bytes already stored}, "413": {$ref: "#/components/responses/Error"}, "415": {$ref: "#/components/responses/Error"}, "422": {$ref: "#/components/responses/Error"}}
   /api/v1/media/{id}/url:
     get:
       tags: [media]
       summary: Short-lived signed URL (5 min); only for cleared scan status; issuance is audited
-      x-permission: media:read | uploader
+      x-permission: media:read | uploader | damage:read (assessment photos)
       parameters: [{$ref: "#/components/parameters/Id"}]
       responses: {"200": {description: url}, "409": {$ref: "#/components/responses/Error"}}
   /api/v1/media/blob:
@@ -375,7 +386,9 @@ paths:
   /api/v1/damage-assessments:
     post:
       tags: [damage]
-      summary: Rapid building assessment (green/yellow/red; yellow and red need observations); people_trapped raises a review-queue report
+      summary: >-
+        Rapid building assessment (green/yellow/red; yellow and red need observations); people_trapped raises a review-queue report.
+        media_ids (up to 10) attach the inspector's own geotagged photos uploaded before.
       x-permission: damage:assess
       parameters: [{$ref: "#/components/parameters/IdempotencyKey"}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: "#/components/schemas/DamageRequest"}}}}
@@ -393,7 +406,7 @@ paths:
   /api/v1/damage-assessments/{id}:
     get:
       tags: [damage]
-      summary: An assessment with the building's inspection history
+      summary: An assessment with its photos (metadata; download through /media/{id}/url) and the building's inspection history
       x-permission: damage:read
       parameters: [{$ref: "#/components/parameters/Id"}]
       responses: {"200": {description: assessment}, "404": {$ref: "#/components/responses/Error"}}
@@ -1095,6 +1108,7 @@ components:
       required: [location, building_use, tag]
       properties:
         incident_id: {type: string, format: uuid}
+        media_ids: {type: array, maxItems: 10, items: {type: string, format: uuid}}
         location: {$ref: "#/components/schemas/Point"}
         address_text: {type: string, maxLength: 300}
         building_use: {type: string, enum: [residential, school, hospital, commercial, government, industrial, religious, other]}

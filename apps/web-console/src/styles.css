@@ -172,3 +172,10 @@ ul.plain { list-style: none; padding: 0; margin: 0; }
 .map-pin.faded { opacity: .45; }
 .map-pin.dashed { border-style: dashed; border-color: #111827; }
 .legend-pin { display: inline-flex !important; align-items: center; justify-content: center; width: 18px !important; height: 18px !important; border-radius: 50%; vertical-align: middle; }
+
+/* Field photos of building assessments */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.photo-card { margin: 0; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; overflow: hidden; background: var(--surface, #fff); }
+.photo-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.photo-card .photo-ph { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; }
+.photo-card figcaption { padding: 6px 8px; line-height: 1.5; }

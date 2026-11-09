@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:crisis_core/crisis_core.dart';
 import 'package:flutter/material.dart';
 
 import 'app_icons.dart';
+import 'photo.dart';
 import 'platform.dart';
 import 'state.dart';
 
@@ -182,7 +185,7 @@ class MissionCard extends StatelessWidget {
               icon: const Icon(AppIcons.domainDisabled),
               label: const Text('ارزیابی ساختمان'),
               onPressed: () => showModalBottomSheet<void>(
-                  context: context, isScrollControlled: true, builder: (_) => DamageSheet(state: state, incidentId: a.incidentId)),
+                  context: context, isScrollControlled: true, builder: (_) => DamageSheet(state: state, incidentId: a.incidentId, incidentCode: a.incidentCode)),
             ),
             OutlinedButton.icon(
               icon: const Icon(AppIcons.myLocation),
@@ -320,11 +323,13 @@ String assessmentLine(QueuedOp op) {
   final tag = (damageTagLabels[op.body['tag']] ?? '').split(' ').first;
   final use = buildingUseLabels[op.body['building_use']] ?? '';
   final trapped = op.body['people_trapped'] == true ? ' · افراد محبوس' : '';
+  final (sent, total) = ResponderState.photoProgress(op);
+  final photos = total == 0 ? '' : ' · ${faDigits(total)} عکس';
   switch (op.state) {
     case OpState.done:
-      return '$tag · $use$trapped · ثبت شد';
+      return '$tag · $use$trapped$photos · ثبت شد';
     case OpState.pending:
-      return '$tag · $use$trapped · در صف ارسال';
+      return '$tag · $use$trapped$photos · در صف ارسال${total == 0 ? '' : ' (${faDigits(sent)} از ${faDigits(total)} عکس ارسال شده)'}';
     default:
       return '$tag · $use · ثبت نشد: ${op.lastError ?? ''}';
   }
@@ -334,7 +339,10 @@ String assessmentLine(QueuedOp op) {
 class DamageSheet extends StatefulWidget {
   final ResponderState state;
   final String? incidentId;
-  const DamageSheet({super.key, required this.state, this.incidentId});
+
+  /// Shown in the photo watermark.
+  final String? incidentCode;
+  const DamageSheet({super.key, required this.state, this.incidentId, this.incidentCode});
 
   @override
   State<DamageSheet> createState() => _DamageSheetState();
@@ -350,16 +358,90 @@ class _DamageSheetState extends State<DamageSheet> {
   final _notes = TextEditingController();
   String? _error;
   bool _busy = false;
+  bool _shooting = false;
+  bool _saved = false;
+  final _photos = <FieldPhoto>[];
 
   @override
   void dispose() {
     _floors.dispose();
     _address.dispose();
     _notes.dispose();
+    // Photos of an assessment that was not saved are not kept on the phone.
+    if (!_saved) {
+      for (final p in _photos) {
+        deletePhotoFile(p.path);
+      }
+    }
     super.dispose();
   }
 
   bool get _valid => _tag != null && (_tag == 'green' || _obs.isNotEmpty);
+
+  Future<void> _takePhoto() async {
+    setState(() {
+      _shooting = true;
+      _error = null;
+    });
+    try {
+      final p = await takeFieldPhoto(label: widget.incidentCode ?? 'FIELD');
+      if (p != null && mounted) setState(() => _photos.add(p));
+    } on PhotoException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'عکس گرفته نشد: $e');
+    } finally {
+      if (mounted) setState(() => _shooting = false);
+    }
+  }
+
+  Widget _photoStrip() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SizedBox(height: 8),
+        Text('عکس‌های محل (${faDigits(_photos.length)} از ${faDigits(maxPhotosPerAssessment)})'),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 92,
+          child: ListView(scrollDirection: Axis.horizontal, children: [
+            for (final p in _photos)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: Stack(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(p.path), width: 120, height: 90, fit: BoxFit.cover, cacheWidth: 240),
+                  ),
+                  PositionedDirectional(
+                    top: 0,
+                    end: 0,
+                    child: IconButton.filledTonal(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      tooltip: 'حذف عکس',
+                      icon: const Icon(AppIcons.close),
+                      onPressed: () {
+                        deletePhotoFile(p.path);
+                        setState(() => _photos.remove(p));
+                      },
+                    ),
+                  ),
+                ]),
+              ),
+            if (_photos.length < maxPhotosPerAssessment)
+              SizedBox(
+                width: 120,
+                child: OutlinedButton(
+                  onPressed: _shooting || _busy ? null : _takePhoto,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(AppIcons.camera),
+                    Text(_shooting ? 'در حال آماده‌سازی…' : 'گرفتن عکس', textAlign: TextAlign.center),
+                  ]),
+                ),
+              ),
+          ]),
+        ),
+        const Text('موقعیت GPS، دقت آن و زمان روی هر عکس حک و همراه آن ارسال می‌شود. بدون اینترنت، عکس‌ها در صف می‌مانند.',
+            style: TextStyle(fontSize: 12)),
+      ]);
 
   Future<void> _save() async {
     setState(() {
@@ -376,7 +458,8 @@ class _DamageSheetState extends State<DamageSheet> {
     }
     await widget.state.assessBuilding(at: loc, tag: _tag!, buildingUse: _use, observations: _obs.toList(),
         peopleTrapped: _trapped, floors: int.tryParse(_floors.text), address: _address.text, notes: _notes.text,
-        incidentId: widget.incidentId);
+        incidentId: widget.incidentId, photos: List.of(_photos));
+    _saved = true;
     if (!mounted) return;
     Navigator.pop(context);
     final op = widget.state.assessments.firstOrNull;
@@ -426,9 +509,10 @@ class _DamageSheetState extends State<DamageSheet> {
             TextField(controller: _floors, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'تعداد طبقات')),
             TextField(controller: _address, decoration: const InputDecoration(labelText: 'نشانی یا نشانه')),
             TextField(controller: _notes, decoration: const InputDecoration(labelText: 'یادداشت')),
+            _photoStrip(),
             if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
             const SizedBox(height: 8),
-            FilledButton(onPressed: !_valid || _busy ? null : _save, child: Text(_busy ? 'در حال ثبت…' : 'ثبت ارزیابی')),
+            FilledButton(onPressed: !_valid || _busy || _shooting ? null : _save, child: Text(_busy ? 'در حال ثبت…' : 'ثبت ارزیابی')),
           ]),
         ),
       );

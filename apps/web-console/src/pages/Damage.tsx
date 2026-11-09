@@ -6,6 +6,7 @@ import { ago, BUILDING_USES, DAMAGE_TAGS, fmtTime, num, OBSERVATIONS, t } from "
 import { Badge, Empty, ErrorBox, Freshness, Section, useAction, usePoll } from "../components/ui";
 import { MapView } from "../components/MapView";
 import { MapPicker, type PickedPoint } from "../components/MapPicker";
+import { Camera } from "lucide-react";
 import { PersonStanding, ShieldAlert, ShieldCheck, ShieldX, Stat, TagLabel, TypeLabel } from "../components/icons";
 
 export type Assessment = {
@@ -13,7 +14,40 @@ export type Assessment = {
   address_text: string; building_use: string; floors: number | null; tag: string; observations: string[];
   people_trapped: boolean; occupants_estimate: number | null; notes: string; supersedes: string | null;
   superseded_at: string | null; report_id: string | null; assessor_name: string; created_at: string;
+  photo_count: number; photos?: Photo[];
 };
+
+/** Field photo of an assessment: where and when it was taken (from the inspector's GPS), never a public URL. */
+export type Photo = {
+  media_id: string; content_type: string; bytes: number; scan_status: string; sha256: string; created_at: string;
+  captured_at?: string; location?: { lat: number; lng: number }; altitude_m?: number; accuracy_m?: number;
+};
+
+/** Thumbnail through a short-lived signed URL; opens full size in a new tab. */
+function PhotoCard({ p }: { p: Photo }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api<{ url: string }>("GET", `/media/${p.media_id}/url`)
+      .then((u) => live && setUrl(u.url))
+      .catch((e: Error) => live && setErr(e.message));
+    return () => { live = false; };
+  }, [p.media_id]);
+  return (
+    <figure className="photo-card">
+      {url ? <a href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt="عکس محل" loading="lazy" /></a>
+        : <div className="photo-ph muted small">{err ?? "در حال بارگذاری…"}</div>}
+      <figcaption className="small">
+        {p.captured_at ? fmtTime(p.captured_at) : fmtTime(p.created_at)}
+        {p.location && <div dir="ltr">{p.location.lat.toFixed(5)}, {p.location.lng.toFixed(5)}
+          {p.accuracy_m !== undefined && <> ±{Math.round(p.accuracy_m)}m</>}
+          {p.altitude_m !== undefined && <> · alt {Math.round(p.altitude_m)}m</>}</div>}
+        <div className="muted" title={p.sha256}>{num(Math.round(p.bytes / 1024))} KB · SHA-256 {p.sha256.slice(0, 12)}…</div>
+      </figcaption>
+    </figure>
+  );
+}
 
 export function DamagePage() {
   const { can } = useSession();
@@ -63,7 +97,7 @@ export function DamagePage() {
                 <td><Badge value={a.tag} /></td>
                 <td><TypeLabel type={a.building_use} label={t(a.building_use)} />{a.floors ? <span className="muted small"> · {num(a.floors)} طبقه</span> : null}</td>
                 <td className="small">{a.address_text || "—"}{a.people_trapped && <div className="warn">احتمال افراد محبوس</div>}</td>
-                <td className="small">{a.observations.map(t).join("، ") || "—"}</td>
+                <td className="small">{a.observations.map(t).join("، ") || "—"}{a.photo_count > 0 && <div className="muted"><Camera size={13} aria-hidden="true" /> {num(a.photo_count)} عکس</div>}</td>
                 <td title={fmtTime(a.created_at)}>{ago(a.created_at)}</td>
               </tr>
             ))}
@@ -95,6 +129,12 @@ function AssessmentPanel({ id, onReassess }: { id: string; onReassess: (a: Asses
         <dt>ارزیاب</dt><dd>{a.assessor_name} · {fmtTime(a.created_at)}</dd>
         {a.notes && <><dt>یادداشت</dt><dd className="pre">{a.notes}</dd></>}
       </dl>
+      {(a.photos?.length ?? 0) > 0 && (
+        <>
+          <h3>عکس‌های محل ({num(a.photos!.length)})</h3>
+          <div className="photo-grid">{a.photos!.map((p) => <PhotoCard key={p.media_id} p={p} />)}</div>
+        </>
+      )}
       {can("damage:assess") && !a.superseded_at && (
         <div className="actions"><button className="btn" onClick={() => onReassess(a)}>بازدید مجدد (ارزیابی جدید)</button></div>
       )}
