@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, num } from "../lib/format";
@@ -33,7 +34,7 @@ export function GuidancePage() {
 
   return (
     <div className="split">
-      <Section title="راهنمای شهروند (دستیار بحران)" actions={can("guidance:edit") && <button className="btn primary small" onClick={() => { setCreating(true); setSelected(null); }}>کارت جدید</button>}>
+      <Section title="راهنمای شهروند (دستیار بحران)" actions={can("guidance:edit") && <button className="btn primary small" onClick={() => { setCreating(true); setSelected(null); }}><Act>کارت جدید</Act></button>}>
         <p className="muted small">اپ شهروند فقط متن «منتشرشده» را نشان می‌دهد. هر متن را یک نفر می‌نویسد و نفر دیگری (فرمانده) تأیید می‌کند. سؤال شهروندان روی گوشی خودشان تطبیق داده می‌شود و به سرور نمی‌آید.</p>
         {pending > 0 && <p className="warn">{num(pending)} کارت نسخه در انتظار تأیید دارد.</p>}
         <ErrorBox error={d.error} />
@@ -106,7 +107,7 @@ function CardPanel({ card, onChanged }: { card: Card; onChanged: () => void }) {
       )}
       {!card.retired_at && (
         <div className="actions">
-          {can("guidance:edit") && !pen && <button className="btn" onClick={() => setEditing(true)}>پیشنهاد اصلاح (نسخه جدید)</button>}
+          {can("guidance:edit") && !pen && <button className="btn" onClick={() => setEditing(true)}><Act>پیشنهاد اصلاح (نسخه جدید)</Act></button>}
           {can("guidance:approve") && pub && <ReasonAction label="بازنشسته کردن" danger onSubmit={async (reason) => { await api("POST", `/guidance/cards/${card.id}/retire`, { body: { reason } }); await onChanged(); }} />}
         </div>
       )}
@@ -130,7 +131,7 @@ function CardEditor({ cardId, initial, onDone, onCancel }: { cardId?: string; in
   });
   const act = useAction();
   return (
-    <Section title={cardId ? "پیشنهاد نسخه جدید" : "کارت راهنمای جدید"} actions={<button className="btn ghost small" onClick={onCancel}>بستن</button>}>
+    <Section title={cardId ? "پیشنهاد نسخه جدید" : "کارت راهنمای جدید"} actions={<button className="btn ghost small" onClick={onCancel}><Act>بستن</Act></button>}>
       <form onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
@@ -158,7 +159,7 @@ function CardEditor({ cardId, initial, onDone, onCancel }: { cardId?: string; in
             ))}
           </div>
         </fieldset>
-        <button className="btn primary" disabled={act.busy}>ارسال برای تأیید</button>
+        <button className="btn primary" disabled={act.busy}><Act>ارسال برای تأیید</Act></button>
         <span className="muted small"> متن تا تأیید فرد دیگر به شهروندان نمی‌رسد.</span>
       </form>
       <ErrorBox error={act.error} />

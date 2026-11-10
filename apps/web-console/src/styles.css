@@ -15,7 +15,8 @@
 body { margin: 0; background: var(--bg); font-size: 14px; line-height: 1.7; }
 a { color: var(--primary); }
 h1 { font-size: 20px; } h2 { font-size: 16px; margin: 0; } h3 { font-size: 14px; margin: 16px 0 6px; }
-.shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.shell { display: grid; grid-template-columns: 236px 1fr; min-height: 100vh; transition: grid-template-columns .18s ease; }
+.shell.collapsed { grid-template-columns: 68px 1fr; }
 .side { background: var(--surface); border-inline-end: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark { display: block; width: 44px; height: 44px; }
@@ -44,6 +45,23 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin: 0; } h3 { font-size: 14px;
 .side nav a.active { background: var(--sel); color: var(--primary); font-weight: 700; }
 .side-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 .side-foot .btn { align-self: stretch; }
+/* Sidebar head and its fold button */
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.btn.icon { display: inline-flex; align-items: center; justify-content: center; padding: 6px; min-width: 34px; }
+.btn.icon svg { vertical-align: 0; }
+.side-toggle { color: var(--muted); flex: none; }
+.side-toggle:hover { background: var(--sel); color: var(--primary); }
+/* Collapsed: an icon rail */
+.shell.collapsed .side { padding: 12px 8px; align-items: center; overflow-x: hidden; }
+.shell.collapsed .side-head { flex-direction: column; }
+.shell.collapsed .brand-mark { width: 36px; height: 36px; }
+.sidenav.rail { align-items: center; gap: 2px; }
+.rail-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.rail-group hr { width: 28px; border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
+.side nav.rail a { width: 42px; height: 42px; padding: 0; justify-content: center; }
+.shell.collapsed .side-foot { align-items: center; width: 100%; }
+.shell.collapsed .side-foot .btn { align-self: center; }
+.side-user { color: var(--muted); display: flex; justify-content: center; cursor: default; }
 .main { padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
 .card.narrow { max-width: 440px; margin: 10vh auto; display: flex; flex-direction: column; gap: 12px; }
@@ -57,7 +75,7 @@ label { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px;
 label.chk { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-height: 34px; }
 textarea { width: 100%; }
-.btn { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block; min-height: 34px; }
+.btn { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; }
 .btn.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .btn.danger { color: var(--danger); border-color: var(--danger); }
 .btn.ghost { border-color: transparent; } .btn.small { padding: 2px 8px; font-size: 12px; min-height: 0; }
@@ -77,7 +95,7 @@ textarea { width: 100%; }
 .kpi-icon { color: var(--primary); display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 12px; background: var(--sel); margin-bottom: 6px; }
 .kpi.warn .kpi-icon { color: var(--warn); background: var(--warn-bg); }
 .with-icon { display: inline-flex; align-items: center; gap: 6px; } .with-icon svg { color: var(--primary); flex: none; }
-.btn svg { vertical-align: -3px; }
+.btn svg { flex: none; }
 .kpi b { font-size: 20px; } .kpi span { color: var(--muted); font-size: 12px; } .kpi.warn { border-color: var(--warn); }
 .banner { padding: 8px 12px; border-radius: 8px; } .banner.warn { background: var(--warn-bg); color: var(--warn); } .banner.info { background: var(--info-bg); }
 .error { background: var(--error-bg); color: var(--danger); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
@@ -98,7 +116,10 @@ textarea { width: 100%; }
 .preview blockquote { margin: 0; padding: 12px; background: var(--bg); border-inline-start: 4px solid var(--primary); border-radius: 6px; font-size: 15px; }
 .popup { font-family: "Vazirmatn", Tahoma, sans-serif; }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; }
+  .shell, .shell.collapsed { grid-template-columns: 1fr; } .side { position: static; height: auto; }
+  /* On a phone the collapsed menu hides; the brand bar and the fold button stay. */
+  .shell.collapsed .side { flex-direction: row; justify-content: space-between; align-items: center; }
+  .shell.collapsed .side-head { flex-direction: row; } .shell.collapsed .sidenav, .shell.collapsed .side-foot { display: none; }
   .split { grid-template-columns: 1fr; } .main { padding: 12px; } .kv { grid-template-columns: 1fr; }
   .table { display: block; overflow-x: auto; }
 }

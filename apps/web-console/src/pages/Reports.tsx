@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { useNavigate } from "react-router-dom";
 import { api, newKey, type Incident, type Report, type ReportDetail } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -22,7 +23,7 @@ export function ReportsPage() {
     <div className="split">
       <Section title="صف بررسی گزارش‌ها" actions={<>
         <Freshness at={list.updatedAt} />
-        {can("report:intake") && <button className="btn primary small" onClick={() => { setIntake(true); setSelected(null); }}>ثبت گزارش تلفنی</button>}
+        {can("report:intake") && <button className="btn primary small" onClick={() => { setIntake(true); setSelected(null); }}><Act>ثبت گزارش تلفنی</Act></button>}
       </>}>
         <div className="row gap wrap filters">
           <label>وضعیت
@@ -132,7 +133,7 @@ function ReportPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
               const u = await api<{ url: string }>("GET", `/media/${m.media_id}/url`);
               window.open(u.url, "_blank", "noopener");
             })}>
-              {m.content_type} ({num(m.bytes / 1024)}KB) — اسکن: {m.scan_status}
+              <Act>{`${m.content_type} (${num(Math.round(m.bytes / 1024))}KB) — اسکن: ${t(m.scan_status)}`}</Act>
             </button>
           ))}
         </div>
@@ -142,7 +143,7 @@ function ReportPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
         <div className="actions">
           {r.status !== "under_review" && (
             <button className="btn" onClick={() => act.run(async () => { await api("POST", `/reports/${id}/claim`); await refresh(); })}>
-              برداشتن برای بررسی
+              <Act>برداشتن برای بررسی</Act>
             </button>
           )}
           <label>شدت

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { Link } from "react-router-dom";
 import { api, type Fulfillment, type Need } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -106,7 +107,7 @@ function NeedPanel({ id, onChanged }: { id: string; onChanged: () => void }) {
           <label>توضیح
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
           </label>
-          <button className="btn primary" disabled={act.busy || !qty || !source.trim()}>ثبت تأمین</button>
+          <button className="btn primary" disabled={act.busy || !qty || !source.trim()}><Act>ثبت تأمین</Act></button>
         </form>
       )}
       <ErrorBox error={act.error} />
@@ -140,7 +141,7 @@ export function IncidentNeeds({ incidentId, ownerActive }: { incidentId: string;
   const items = list.data?.items ?? [];
 
   return (
-    <Section title="نیازهای حادثه" actions={<Link className="btn small ghost" to="/needs">همه نیازها</Link>}>
+    <Section title="نیازهای حادثه" actions={<Link className="btn small ghost" to="/needs"><Act>همه نیازها</Act></Link>}>
       <ErrorBox error={list.error} />
       {list.data && items.length === 0 && <Empty>نیازی ثبت نشده است.</Empty>}
       <table className="table">
@@ -185,7 +186,7 @@ export function IncidentNeeds({ incidentId, ownerActive }: { incidentId: string;
             <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={1000}
               required={form.category === "other"} />
           </label>
-          <button className="btn primary" disabled={act.busy || !form.quantity}>ثبت نیاز</button>
+          <button className="btn primary" disabled={act.busy || !form.quantity}><Act>ثبت نیاز</Act></button>
         </form>
       )}
       <ErrorBox error={act.error} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Act } from "../components/Act";
 import { Link } from "react-router-dom";
 import { api, newKey, type Incident } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -65,7 +66,7 @@ export function DamagePage() {
     <div className="split">
       <Section title="ارزیابی سریع خسارت ساختمان‌ها" actions={<>
         <Freshness at={list.updatedAt} />
-        {can("damage:assess") && <button className="btn primary small" onClick={() => { setCreating({}); setSelected(null); }}>ثبت ارزیابی</button>}
+        {can("damage:assess") && <button className="btn primary small" onClick={() => { setCreating({}); setSelected(null); }}><Act>ثبت ارزیابی</Act></button>}
       </>}>
         <ErrorBox error={list.error} />
         {list.data && (
@@ -136,7 +137,7 @@ function AssessmentPanel({ id, onReassess }: { id: string; onReassess: (a: Asses
         </>
       )}
       {can("damage:assess") && !a.superseded_at && (
-        <div className="actions"><button className="btn" onClick={() => onReassess(a)}>بازدید مجدد (ارزیابی جدید)</button></div>
+        <div className="actions"><button className="btn" onClick={() => onReassess(a)}><Act>بازدید مجدد (ارزیابی جدید)</Act></button></div>
       )}
       <h3>سابقه بازدیدهای این ساختمان</h3>
       <ul className="timeline">
@@ -158,7 +159,7 @@ function AssessmentForm({ supersedes, onDone, onCancel }: { supersedes?: Assessm
   const act = useAction();
   const needObs = f.tag === "yellow" || f.tag === "red";
   return (
-    <Section title={supersedes ? "بازدید مجدد ساختمان" : "ثبت ارزیابی ساختمان"} actions={<button className="btn ghost small" onClick={onCancel}>بستن</button>}>
+    <Section title={supersedes ? "بازدید مجدد ساختمان" : "ثبت ارزیابی ساختمان"} actions={<button className="btn ghost small" onClick={onCancel}><Act>بستن</Act></button>}>
       <form onSubmit={(e) => {
         e.preventDefault();
         void act.run(async () => {
@@ -198,7 +199,7 @@ function AssessmentForm({ supersedes, onDone, onCancel }: { supersedes?: Assessm
         <label className="chk warn"><input type="checkbox" checked={f.people_trapped} onChange={(e) => setF({ ...f, people_trapped: e.target.checked })} />
           احتمال افراد محبوس (یک گزارش فوری در صف گزارش‌ها ثبت می‌شود)</label>
         <label>یادداشت<textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} maxLength={1000} /></label>
-        <button className="btn primary" disabled={act.busy || !f.tag || !loc || (needObs && f.observations.length === 0)}>ثبت ارزیابی</button>
+        <button className="btn primary" disabled={act.busy || !f.tag || !loc || (needObs && f.observations.length === 0)}><Act>ثبت ارزیابی</Act></button>
       </form>
       <ErrorBox error={act.error} />
     </Section>

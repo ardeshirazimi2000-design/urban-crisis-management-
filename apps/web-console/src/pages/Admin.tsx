@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { Act } from "../components/Act";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, t } from "../lib/format";
@@ -50,9 +51,9 @@ function TempPassword({ value, onClose }: { value: string; onClose: () => void }
         <p>این رمز فقط همین یک بار نمایش داده می‌شود؛ آن را به‌صورت امن به کاربر تحویل دهید. کاربر در اولین ورود باید آن را تغییر دهد.</p>
         <p className="temppw" dir="ltr">{value}</p>
         <div className="row gap">
-          <button className="btn" onClick={() => navigator.clipboard?.writeText(value).then(() => setCopied("کپی شد"), () => setCopied("کپی نشد؛ دستی یادداشت کنید"))}>کپی رمز</button>
+          <button className="btn" onClick={() => navigator.clipboard?.writeText(value).then(() => setCopied("کپی شد"), () => setCopied("کپی نشد؛ دستی یادداشت کنید"))}><Act>کپی رمز</Act></button>
           <span className="muted small">{copied}</span>
-          <button className="btn primary" onClick={onClose}>بستم</button>
+          <button className="btn primary" onClick={onClose}><Act>بستم</Act></button>
         </div>
       </div>
     </div>
@@ -68,7 +69,7 @@ function Users({ local }: { local: boolean }) {
   const [creating, setCreating] = useState(false);
   const [temp, setTemp] = useState("");
   return (
-    <Section title="کاربران و نقش‌ها" actions={local && <button className="btn primary" onClick={() => setCreating(true)}>تعریف کاربر</button>}>
+    <Section title="کاربران و نقش‌ها" actions={local && <button className="btn primary" onClick={() => setCreating(true)}><Act>تعریف کاربر</Act></button>}>
       <p className="muted small">هر کاربر فقط یک نقش دارد. مدیر امنیت کاربران و تنظیمات را مدیریت می‌کند و ممیز امنیتی ممیزی را؛ هیچ‌کس نقش خود را تغییر نمی‌دهد.</p>
       <div className="row gap wrap filters">
         <input placeholder="جستجو: نام، نام کاربری، کد ملی یا موبایل" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -159,8 +160,8 @@ function CreateUser({ onClose, onCreated }: { onClose: () => void; onCreated: (t
       <RoleFields value={role} onChange={setRole} roles={roles} />
       {!f.console_access && f.app_access && <p className="muted small">کاربری که فقط دسترسی اپلیکیشن دارد، امدادگر یا شهروند است. شهروندان معمولاً خودشان از اپ ثبت‌نام می‌کنند؛ تعریف شهروند در این‌جا برای مواردی مثل داوطلبان ثبت‌شده است.</p>}
       <div className="row gap">
-        <button className="btn primary" disabled={busy}>{busy ? "استعلام شاهکار…" : "استعلام شاهکار و تعریف"}</button>
-        <button type="button" className="btn ghost" onClick={onClose}>انصراف</button>
+        <button className="btn primary" disabled={busy}><Act>{busy ? "استعلام شاهکار…" : "استعلام شاهکار و تعریف"}</Act></button>
+        <button type="button" className="btn ghost" onClick={onClose}><Act>انصراف</Act></button>
       </div>
       <ErrorBox error={error} />
     </form>
@@ -182,7 +183,7 @@ function UserPanel({ id, onTemp, onChanged, onClose }: { id: string; onTemp: (pw
     <div className="card subtle">
       <header className="card-head">
         <h2>{u.first_name} {u.last_name} {self && <span className="muted small">(حساب خودتان)</span>}</h2>
-        <button className="btn ghost small" onClick={onClose}>بستن</button>
+        <button className="btn ghost small" onClick={onClose}><Act>بستن</Act></button>
       </header>
       <dl className="kv">
         <dt>کد ملی / موبایل</dt><dd dir="ltr">{u.national_code} · {u.mobile}</dd>
@@ -206,7 +207,7 @@ function UserPanel({ id, onTemp, onChanged, onClose }: { id: string; onTemp: (pw
       {can("user:manage") && (
         <div className="stack">
           <h3>ویرایش</h3>
-          {!edit ? <button className="btn" onClick={() => setEdit({ mobile: u.mobile ?? "", position_title: u.position_title, username: u.username ?? "", allowed_cidrs: u.allowed_cidrs.join(", ") })}>ویرایش اطلاعات</button> : (
+          {!edit ? <button className="btn" onClick={() => setEdit({ mobile: u.mobile ?? "", position_title: u.position_title, username: u.username ?? "", allowed_cidrs: u.allowed_cidrs.join(", ") })}><Act>ویرایش اطلاعات</Act></button> : (
             <form className="stack" onSubmit={(e) => {
               e.preventDefault();
               void act.run(async () => {
@@ -224,7 +225,7 @@ function UserPanel({ id, onTemp, onChanged, onClose }: { id: string; onTemp: (pw
                 {u.kind === "staff" && <label>نام کاربری<input dir="ltr" value={edit.username} onChange={(e) => setEdit({ ...edit, username: e.target.value })} /></label>}
                 {u.kind === "staff" && <label>شبکه‌های مجاز کنسول<input dir="ltr" value={edit.allowed_cidrs} onChange={(e) => setEdit({ ...edit, allowed_cidrs: e.target.value })} /></label>}
               </div>
-              <div className="row gap"><button className="btn primary" disabled={act.busy}>ذخیره</button><button type="button" className="btn ghost" onClick={() => setEdit(null)}>انصراف</button></div>
+              <div className="row gap"><button className="btn primary" disabled={act.busy}><Act>ذخیره</Act></button><button type="button" className="btn ghost" onClick={() => setEdit(null)}><Act>انصراف</Act></button></div>
             </form>
           )}
           {!self && u.kind === "staff" && (
@@ -246,12 +247,12 @@ function UserPanel({ id, onTemp, onChanged, onClose }: { id: string; onTemp: (pw
           {can("user:manage") && u.console_access && <button className="btn" disabled={act.busy} onClick={() => {
             if (!confirm("رمز فعلی کاربر باطل و یک رمز موقت جدید صادر می‌شود. ادامه می‌دهید؟")) return;
             void act.run(async () => { const r = await api<{ temporary_password: string }>("POST", `/admin/users/${id}/reset-password`); await done(); onTemp(r.temporary_password); });
-          }}>بازنشانی رمز</button>}
-          {can("user:manage") && u.locked && <button className="btn" onClick={() => void act.run(async () => { await api("POST", `/admin/users/${id}/unlock`); await done(); })}>بازگشایی قفل</button>}
+          }}><Act>بازنشانی رمز</Act></button>}
+          {can("user:manage") && u.locked && <button className="btn" onClick={() => void act.run(async () => { await api("POST", `/admin/users/${id}/unlock`); await done(); })}><Act>بازگشایی قفل</Act></button>}
           {can("shahkar:inquire") && <button className="btn" onClick={() => void act.run(async () => {
             const r = await api<{ matched: boolean }>("POST", `/admin/users/${id}/shahkar`);
             alert(r.matched ? "تطابق شاهکار تأیید شد." : "عدم تطابق شاهکار — حساب تعلیق شد."); await done();
-          })}>استعلام مجدد شاهکار</button>}
+          })}><Act>استعلام مجدد شاهکار</Act></button>}
           {can("user:manage") && ["active", "suspended", "disabled"].filter((s) => s !== u.status).map((s) => (
             <ReasonAction key={s} label={{ active: "فعال‌سازی", suspended: "تعلیق", disabled: "غیرفعال‌سازی" }[s]!} danger={s !== "active"}
               onSubmit={async (reason) => { await api("POST", `/admin/users/${id}/status`, { body: { status: s, reason } }); await done(); }} />
@@ -260,7 +261,7 @@ function UserPanel({ id, onTemp, onChanged, onClose }: { id: string; onTemp: (pw
       )}
       {can("session:manage") && sessions.data && (
         <div className="stack">
-          <div className="row gap"><h3>نشست‌ها</h3>{!self && <button className="btn small danger" onClick={() => void act.run(async () => { await api("DELETE", `/admin/users/${id}/sessions`); await done(); })}>ابطال همه</button>}</div>
+          <div className="row gap"><h3>نشست‌ها</h3>{!self && <button className="btn small danger" onClick={() => void act.run(async () => { await api("DELETE", `/admin/users/${id}/sessions`); await done(); })}><Act>ابطال همه</Act></button>}</div>
           <SessionsTable items={sessions.data.items} current={null} onRevoke={self ? undefined : (sid) => void act.run(async () => { await api("DELETE", `/admin/users/${id}/sessions/${sid}`); await done(); })} />
         </div>
       )}
@@ -307,7 +308,7 @@ function Shahkar() {
       <form className="row gap wrap" onSubmit={(e) => { e.preventDefault(); void act.run(async () => { setResult(await api("POST", "/admin/shahkar/inquiry", { body: { national_code: nc, mobile } })); await list.reload(); }); }}>
         <label>کد ملی<input dir="ltr" required value={nc} onChange={(e) => setNc(e.target.value)} /></label>
         <label>موبایل<input dir="ltr" required value={mobile} onChange={(e) => setMobile(e.target.value)} /></label>
-        <button className="btn" disabled={act.busy}>استعلام</button>
+        <button className="btn" disabled={act.busy}><Act>استعلام</Act></button>
       </form>
       {result && <div className={result.ok && result.matched ? "banner info" : "banner warn"}>
         {!result.ok ? `سامانه شاهکار پاسخ نداد: ${result.message}` : result.matched ? "شماره موبایل متعلق به صاحب کد ملی است." : "عدم تطابق: شماره به نام این کد ملی نیست."}</div>}
@@ -358,7 +359,7 @@ function RolesMatrix() {
   const d = data.data;
   const groups = d ? Array.from(new Set(d.permissions.map((p) => p.group))) : [];
   return (
-    <Section title="نقش‌ها و ماتریس دسترسی" actions={<button className="btn small" onClick={() => setOpen(!open)}>{open ? "بستن ماتریس" : "نمایش ماتریس دسترسی"}</button>}>
+    <Section title="نقش‌ها و ماتریس دسترسی" actions={<button className="btn small" onClick={() => setOpen(!open)}><Act>{open ? "بستن ماتریس" : "نمایش ماتریس دسترسی"}</Act></button>}>
       <ErrorBox error={data.error} />
       <p className="muted small">هر کاربر یک نقش دارد که در «تعریف کاربر» یا «تغییر نقش» تعیین می‌شود. دسترسی هر نقش ثابت است تا تفکیک وظایف
         (مدیر امنیت / ممیز / فرماندهی عملیات) دور زده نشود. دسترسی‌های مدیریتی و امنیتی در اپلیکیشن هرگز فعال نیستند.</p>

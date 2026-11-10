@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { api, type Shelter, type ShelterLog } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ago, fmtTime, num } from "../lib/format";
@@ -108,7 +109,7 @@ function ShelterPanel({ id, onChanged }: { id: string; onChanged: () => void }) 
           <label>توضیح
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
           </label>
-          <button className="btn primary" disabled={move.busy || (!Number(admitted) && !Number(discharged))}>ثبت جابه‌جایی</button>
+          <button className="btn primary" disabled={move.busy || (!Number(admitted) && !Number(discharged))}><Act>ثبت جابه‌جایی</Act></button>
         </form>
       )}
       <ErrorBox error={move.error} />
@@ -121,10 +122,10 @@ function ShelterPanel({ id, onChanged }: { id: string; onChanged: () => void }) 
           <label>دلیل (الزامی)
             <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
           </label>
-          <button className="btn" disabled={settings.busy || !capacity || !reason.trim()}>تغییر ظرفیت</button>
+          <button className="btn" disabled={settings.busy || !capacity || !reason.trim()}><Act>تغییر ظرفیت</Act></button>
           <button type="button" className={s.accepting ? "btn danger" : "btn"} disabled={settings.busy || !reason.trim()}
             onClick={() => void saveSettings({ accepting: !s.accepting })}>
-            {s.accepting ? "بستن پذیرش" : "باز کردن پذیرش"}
+            <Act>{s.accepting ? "بستن پذیرش" : "باز کردن پذیرش"}</Act>
           </button>
         </form>
       )}

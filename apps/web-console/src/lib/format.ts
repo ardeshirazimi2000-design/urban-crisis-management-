@@ -44,7 +44,7 @@ export const L: Record<string, string> = {
   pending_approval: "در انتظار تأیید", approved: "تأییدشده", sending: "در حال ارسال", partially_sent: "ارسال ناقص", sent: "ارسال‌شده",
   failed: "ناموفق", cancelled: "لغوشده", expired: "منقضی",
   // attempt status
-  pending: "در صف", in_flight: "در حال ارسال", delivered: "تحویل‌شده (گزارش ارائه‌دهنده)", unknown: "نامشخص (در حال تطبیق)",
+  clean: "پاک", infected: "آلوده", pending: "در صف", in_flight: "در حال ارسال", delivered: "تحویل‌شده (گزارش ارائه‌دهنده)", unknown: "نامشخص (در حال تطبیق)",
   superseded: "متوقف‌شده", not_started: "شروع‌نشده", done: "انجام‌شده", skipped: "ردشده از تحلیل",
   // resources
   ambulance: "آمبولانس", fire_truck: "خودرو آتش‌نشانی", rescue_team: "تیم امداد و نجات", police_unit: "واحد انتظامی",

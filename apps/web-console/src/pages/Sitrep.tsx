@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, num, t } from "../lib/format";
@@ -97,8 +98,8 @@ export function SitrepPage() {
     <div className="split">
       <Section title={shown ? `گزارش وضعیت شماره ${num(shown.number)}` : "گزارش وضعیت (لحظه‌ای)"} actions={<>
         {!shown && <Freshness at={live.updatedAt} />}
-        {shown && <button className="btn small" onClick={() => setView(null)}>بازگشت به وضعیت لحظه‌ای</button>}
-        <button className="btn small" onClick={() => window.print()}>چاپ</button>
+        {shown && <button className="btn small" onClick={() => setView(null)}><Act>بازگشت به وضعیت لحظه‌ای</Act></button>}
+        <button className="btn small" onClick={() => window.print()}><Act>چاپ</Act></button>
       </>}>
         {shown ? (
           <>
@@ -128,7 +129,7 @@ export function SitrepPage() {
                 <label style={{ flex: "1 1 100%" }}>ارزیابی فرمانده (الزامی): وضعیت کلی، اولویت‌های دوره بعد، درخواست‌ها
                   <textarea rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={5000} required />
                 </label>
-                <button className="btn primary" disabled={act.busy || !summary.trim()}>صدور گزارش وضعیت شماره {num((items[0]?.number ?? 0) + 1)}</button>
+                <button className="btn primary" disabled={act.busy || !summary.trim()}><Act>{`صدور گزارش وضعیت شماره ${num((items[0]?.number ?? 0) + 1)}`}</Act></button>
                 <span className="muted small">ارقام همان لحظه صدور توسط سرور ثبت و قفل می‌شود و قابل ویرایش نیست.</span>
               </form>
             )}

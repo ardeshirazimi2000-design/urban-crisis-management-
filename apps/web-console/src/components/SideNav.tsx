@@ -25,7 +25,7 @@ function isActive(to: string, pathname: string) {
  * Cascading sidebar: sections fold open and closed; the section of the current page always opens. Sections the
  * user has no page in are hidden. The open sections are remembered per browser.
  */
-export function SideNav({ items }: { items: NavItem[] }) {
+export function SideNav({ items, collapsed = false }: { items: NavItem[]; collapsed?: boolean }) {
   const { pathname } = useLocation();
   const byPath = new Map(items.filter((i) => i.show).map((i) => [i.to, i]));
   const groups = GROUPS.map((g) => ({ ...g, entries: g.items.map((p) => byPath.get(p)).filter((x): x is NavItem => !!x) }))
@@ -59,6 +59,19 @@ export function SideNav({ items }: { items: NavItem[] }) {
     return n;
   });
 
+  // Collapsed rail: every page as an icon (name on hover), sections separated by a line.
+  if (collapsed) {
+    return (
+      <nav className="sidenav rail" aria-label="منوی سامانه">
+        {groups.map((g, i) => (
+          <div key={g.id} className="rail-group" role="group" aria-label={g.title}>
+            {i > 0 && <hr />}
+            {g.entries.map((e) => <Link key={e.to} item={e} iconOnly />)}
+          </div>
+        ))}
+      </nav>
+    );
+  }
   // A single section (e.g. the security auditor) needs no folding.
   if (groups.length === 1) {
     return <nav className="sidenav">{groups[0].entries.map((e) => <Link key={e.to} item={e} />)}</nav>;
@@ -87,11 +100,11 @@ export function SideNav({ items }: { items: NavItem[] }) {
   );
 }
 
-function Link({ item }: { item: NavItem }) {
+function Link({ item, iconOnly = false }: { item: NavItem; iconOnly?: boolean }) {
   const Icon = NAV_ICONS[item.to];
   return (
-    <NavLink to={item.to} end={item.to === "/"}>
-      {Icon && <Icon size={17} strokeWidth={1.75} aria-hidden="true" />}{item.label}
+    <NavLink to={item.to} end={item.to === "/"} title={iconOnly ? item.label : undefined} aria-label={iconOnly ? item.label : undefined}>
+      {Icon && <Icon size={iconOnly ? 20 : 17} strokeWidth={1.75} aria-hidden="true" />}{!iconOnly && item.label}
     </NavLink>
   );
 }

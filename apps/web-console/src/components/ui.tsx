@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Act } from "./Act";
 import { ApiError } from "../lib/api";
 import { ago, t } from "../lib/format";
 
@@ -141,7 +142,7 @@ export function ReasonAction({ label, onSubmit, required = true, danger, extra }
   if (!open)
     return (
       <button className={danger ? "btn danger" : "btn"} onClick={() => setOpen(true)}>
-        {label}
+        <Act>{label}</Act>
       </button>
     );
   return (
@@ -161,9 +162,9 @@ export function ReasonAction({ label, onSubmit, required = true, danger, extra }
         onChange={(e) => setReason(e.target.value)} rows={2} />
       <div className="row gap">
         <button className={danger ? "btn danger" : "btn primary"} disabled={busy || (required && !reason.trim())}>
-          {busy ? "…" : "ثبت"}
+          {busy ? "…" : <Act>ثبت</Act>}
         </button>
-        <button type="button" className="btn ghost" onClick={() => setOpen(false)}>انصراف</button>
+        <button type="button" className="btn ghost" onClick={() => setOpen(false)}><Act>انصراف</Act></button>
       </div>
       <ErrorBox error={error} />
     </form>

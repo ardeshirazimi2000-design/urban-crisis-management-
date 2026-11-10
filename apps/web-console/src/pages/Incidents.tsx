@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { Link, useParams } from "react-router-dom";
 import { api, download, newKey, saveBlob, type Incident, type IncidentDetail, type Report, type Resource } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -76,7 +77,7 @@ export function IncidentsPage() {
               <option value="draft">{t("draft")}</option><option value="open">{t("open")}</option></select></label>
             <label>عرض جغرافیایی<input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} inputMode="decimal" dir="ltr" /></label>
             <label>طول جغرافیایی<input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} inputMode="decimal" dir="ltr" /></label>
-            <button className="btn primary" disabled={act.busy}>ثبت</button>
+            <button className="btn primary" disabled={act.busy}><Act>ثبت</Act></button>
           </form>
           <ErrorBox error={act.error} />
         </Section>
@@ -190,7 +191,7 @@ export function IncidentDetailPage() {
           )}
           <h3>هشدارهای مرتبط</h3>
           <ul className="list">{alerts.map((a) => <li key={a.id}><Link to={`/alerts/${a.id}`}>{a.region_label}</Link> <Badge value={a.status} /> <Badge value={a.mode} /></li>)}</ul>
-          {can("alert:draft") && <Link className="btn small" to={`/alerts/new?incident=${id}`}>پیش‌نویس هشدار برای این حادثه</Link>}
+          {can("alert:draft") && <Link className="btn small" to={`/alerts/new?incident=${id}`}><Act>پیش‌نویس هشدار برای این حادثه</Act></Link>}
         </Section>
       </div>
 
@@ -222,7 +223,7 @@ function ExportButton() {
       <button className="btn small" disabled={act.busy} onClick={() => void act.run(async () => {
         const f = await download("GET", "/admin/export/incidents", { query: { format: "csv" } });
         saveBlob(f.blob, f.name);
-      })}>خروجی CSV</button>
+      })}><Act>خروجی CSV</Act></button>
       <ErrorBox error={act.error} />
     </>
   );

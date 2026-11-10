@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Act } from "./Act";
 
 /**
  * Keeps a rendering error in one page from blanking the whole console: the menu stays usable and the page shows
@@ -20,7 +21,7 @@ export class PageErrorBoundary extends Component<{ children: ReactNode }, { erro
           <small dir="ltr">{this.state.error.message}</small>
         </div>
         <p className="muted small">صفحه را دوباره بارگذاری کنید؛ اگر تکرار شد، متن خطا را برای پشتیبانی بفرستید.</p>
-        <button className="btn" onClick={() => location.reload()}>بارگذاری دوباره</button>
+        <button className="btn" onClick={() => location.reload()}><Act>بارگذاری دوباره</Act></button>
       </div>
     );
   }

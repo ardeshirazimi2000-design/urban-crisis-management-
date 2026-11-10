@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { api, type Resource } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ago, num, RESOURCE_TYPES, t } from "../lib/format";
@@ -70,7 +71,7 @@ export function ResourcesPage() {
             <label>ظرفیت<input value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} inputMode="numeric" /></label>
             <label>عرض<input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} dir="ltr" /></label>
             <label>طول<input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} dir="ltr" /></label>
-            <button className="btn primary" disabled={act.busy}>ثبت</button>
+            <button className="btn primary" disabled={act.busy}><Act>ثبت</Act></button>
           </form>
           <ErrorBox error={act.error} />
         </Section>

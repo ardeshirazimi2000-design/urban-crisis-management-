@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Act } from "../components/Act";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, newKey, type Alert, type Delivery, type Template } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -13,7 +14,7 @@ export function AlertsPage() {
   return (
     <Section title="هشدارهای عمومی" actions={<>
       <Freshness at={list.updatedAt} />
-      {can("alert:draft") && <Link className="btn primary small" to="/alerts/new">پیش‌نویس جدید</Link>}
+      {can("alert:draft") && <Link className="btn primary small" to="/alerts/new"><Act>پیش‌نویس جدید</Act></Link>}
     </>}>
       <label>وضعیت<select value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="">همه</option>
@@ -96,7 +97,7 @@ export function NewAlertPage() {
             </label>
           ))}
         </fieldset>
-        <button className="btn primary" disabled={act.busy || f.channels.length === 0}>ذخیره پیش‌نویس</button>
+        <button className="btn primary" disabled={act.busy || f.channels.length === 0}><Act>ذخیره پیش‌نویس</Act></button>
       </form>
       <ErrorBox error={act.error} />
       <MapView height={300} center={[+f.lat || 35.7, +f.lng || 51.4]} zoom={11}
@@ -149,7 +150,7 @@ export function AlertDetailPage() {
         <div className="actions">
           {al.status === "draft" && can("alert:draft") && (
             <button className="btn" disabled={act.busy} onClick={() => act.run(async () => { await api("POST", `/alerts/${id}/submit`, { body: { version: al.version } }); await a.reload(); })}>
-              ارسال برای تأیید
+              <Act>ارسال برای تأیید</Act>
             </button>
           )}
           {al.status === "pending_approval" && can("alert:approve") && (
@@ -160,13 +161,13 @@ export function AlertDetailPage() {
             <button className="btn primary" disabled={act.busy} onClick={() => {
               if (!window.confirm(al.mode === "operational" ? "پیام عملیاتی به شهروندان ارسال شود؟" : "پیام آزمایشی ارسال شود؟")) return;
               void act.run(async () => { await api("POST", `/alerts/${id}/dispatch`, { idempotent: dispatchKey.current }); await a.reload(); await delivery.reload(); });
-            }}>ارسال</button>
+            }}><Act>ارسال</Act></button>
           )}
           {["draft", "pending_approval", "approved", "sending"].includes(al.status) && (can("alert:cancel") || (al.status === "draft" && can("alert:draft"))) && (
             <ReasonAction label="لغو" danger onSubmit={async (reason) => { await api("POST", `/alerts/${id}/cancel`, { body: { reason, version: al.version } }); await a.reload(); }} />
           )}
           {["sent", "partially_sent"].includes(al.status) && can("alert:draft") && (
-            <Link className="btn" to={`/alerts/new${al.incident_id ? `?incident=${al.incident_id}` : ""}`}>صدور اصلاحیه</Link>
+            <Link className="btn" to={`/alerts/new${al.incident_id ? `?incident=${al.incident_id}` : ""}`}><Act>صدور اصلاحیه</Act></Link>
           )}
         </div>
       </Section>

@@ -5,7 +5,7 @@ import { useSession } from "./lib/session";
 import { t } from "./lib/format";
 import { SideNav } from "./components/SideNav";
 import { Brand } from "./components/Brand";
-import { LogOut } from "lucide-react";
+import { LogOut, PanelRightClose, PanelRightOpen, UserRound } from "lucide-react";
 import { AccessHistoryBanner, LoginPage } from "./pages/Login";
 import { AccountPage, ForcedPasswordChange } from "./pages/Account";
 import { SecurityPage } from "./pages/Security";
@@ -33,10 +33,33 @@ function useOnline() {
   return online;
 }
 
+const NAV_KEY = "crisis.nav.collapsed";
+
+/** The sidebar folds into an icon rail; the choice is remembered per browser. */
+function useCollapsedNav(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () => setCollapsed((c) => {
+    try {
+      localStorage.setItem(NAV_KEY, c ? "0" : "1");
+    } catch {
+      /* per-browser convenience only */
+    }
+    return !c;
+  });
+  return [collapsed, toggle];
+}
+
 export function App() {
   const { me, loading, can, logout } = useSession();
   const online = useOnline();
   const { pathname } = useLocation();
+  const [collapsed, toggleCollapsed] = useCollapsedNav();
   if (loading) return <div className="center muted">در حال بارگذاری…</div>;
   if (!me) return <LoginPage />;
   if (me.password_change_required) return <ForcedPasswordChange />;
@@ -57,14 +80,28 @@ export function App() {
     { to: "/account", label: "حساب من", show: !!me.channel },
   ].filter((n) => n.show);
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? " collapsed" : ""}`}>
       <aside className="side">
-        <Brand />
-        <SideNav items={nav} />
+        <div className="side-head">
+          <Brand compact={collapsed} />
+          <button type="button" className="btn ghost icon side-toggle" onClick={toggleCollapsed} aria-expanded={!collapsed}
+            title={collapsed ? "باز کردن منو" : "جمع کردن منو"} aria-label={collapsed ? "باز کردن منو" : "جمع کردن منو"}>
+            {collapsed ? <PanelRightOpen size={18} aria-hidden="true" /> : <PanelRightClose size={18} aria-hidden="true" />}
+          </button>
+        </div>
+        <SideNav items={nav} collapsed={collapsed} />
         <div className="side-foot">
-          <div>{me.display_name || me.subject}</div>
-          <div className="muted small">{me.roles.map(t).join("، ")}</div>
-          <button className="btn danger" onClick={logout}><LogOut size={16} aria-hidden="true" /> خروج از سامانه</button>
+          {collapsed ? (
+            <div className="side-user" title={`${me.display_name || me.subject} — ${me.roles.map(t).join("، ")}`}><UserRound size={20} aria-hidden="true" /></div>
+          ) : (
+            <>
+              <div>{me.display_name || me.subject}</div>
+              <div className="muted small">{me.roles.map(t).join("، ")}</div>
+            </>
+          )}
+          <button className={`btn danger${collapsed ? " icon" : ""}`} onClick={logout} title="خروج از سامانه" aria-label="خروج از سامانه">
+            <LogOut size={16} aria-hidden="true" />{!collapsed && " خروج از سامانه"}
+          </button>
         </div>
       </aside>
       <main className="main">

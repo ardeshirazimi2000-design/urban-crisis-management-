@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Act } from "../components/Act";
 import { api, ApiError, type AccessHistory, type Tokens } from "../lib/api";
 import { useSession } from "../lib/session";
 import { ErrorBox, useAction } from "../components/ui";
@@ -38,7 +39,7 @@ export function LoginPage() {
           <Brand size="lg" />
           <ErrorBox error={failure} />
           {failure.code === "HTTPS_REQUIRED" && <p className="muted small">نشانی را با <span dir="ltr">https://</span> باز کنید.</p>}
-          <button className="btn" onClick={() => location.reload()}>تلاش دوباره</button>
+          <button className="btn" onClick={() => location.reload()}><Act>تلاش دوباره</Act></button>
         </div>
       </div>
     );
@@ -80,8 +81,8 @@ function LocalLogin({ help }: { help: string }) {
           <input className="otp" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={8} autoFocus required
             value={code} onChange={(e) => setCode(e.target.value)} />
         </label>
-        <button type="submit" className="btn primary" disabled={busy}>ورود</button>
-        <button type="button" className="btn ghost" onClick={() => { setChallenge(null); setCode(""); }}>بازگشت</button>
+        <button type="submit" className="btn primary" disabled={busy}><Act>ورود</Act></button>
+        <button type="button" className="btn ghost" onClick={() => { setChallenge(null); setCode(""); }}><Act>بازگشت</Act></button>
         <ErrorBox error={error} />
       </form>
     );
@@ -104,8 +105,8 @@ function LocalLogin({ help }: { help: string }) {
         <input name="password" type="password" autoComplete="current-password" dir="ltr" required
           value={password} onChange={(e) => setPassword(e.target.value)} />
       </label>
-      <button type="submit" className="btn primary" disabled={busy}>ادامه</button>
-      <button type="button" className="btn ghost small" onClick={() => setShowHelp(!showHelp)}>راهنمای ورود</button>
+      <button type="submit" className="btn primary" disabled={busy}><Act>ادامه</Act></button>
+      <button type="button" className="btn ghost small" onClick={() => setShowHelp(!showHelp)}><Act>راهنمای ورود</Act></button>
       {showHelp && <p className="muted small">{help}</p>}
       <ErrorBox error={error} />
     </form>
@@ -122,7 +123,7 @@ export function AccessHistoryBanner() {
       آخرین ورود موفق: {history.last_login_at ? <>{fmtTime(history.last_login_at)} از <span dir="ltr">{history.last_login_ip}</span></> : "اولین ورود"}
       {" · "}تلاش‌های ناموفق از آخرین ورود: {num(failed)}
       {failed > 0 && history.last_failed_login_at && <> (آخرین: {fmtTime(history.last_failed_login_at)}) — اگر این تلاش‌ها از شما نبوده، به مدیر امنیت اطلاع دهید.</>}
-      <button className="btn ghost small" onClick={dismissHistory}>بستن</button>
+      <button className="btn ghost small" onClick={dismissHistory}><Act>بستن</Act></button>
     </div>
   );
 }
@@ -169,7 +170,7 @@ function DevLogin() {
         <input type="text" name="access-code" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
           dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} />
       </label>
-      <button type="submit" className="btn primary" disabled={busy}>ورود</button>
+      <button type="submit" className="btn primary" disabled={busy}><Act>ورود</Act></button>
       <ErrorBox error={error} />
     </form>
   );

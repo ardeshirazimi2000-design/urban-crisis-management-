@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { Link } from "react-router-dom";
 import { api, newKey, type Casualty, type Hospital } from "../lib/api";
 import { useSession } from "../lib/session";
@@ -99,7 +100,7 @@ function HospitalPanel({ id, onChanged }: { id: string; onChanged: () => void })
             </select>
           </label>
           <label>یادداشت<input value={f.note} onChange={(e) => setForm({ ...f, note: e.target.value })} maxLength={500} /></label>
-          <button className="btn primary" disabled={act.busy}>ثبت گزارش ظرفیت</button>
+          <button className="btn primary" disabled={act.busy}><Act>ثبت گزارش ظرفیت</Act></button>
         </form>
       )}
       <ErrorBox error={act.error} />
@@ -157,12 +158,12 @@ function CasualtyActions({ c, onDone, near, hospitalView }: { c: Casualty; onDon
                 <option key={h.id} value={h.id}>{h.name} — {ER_LABEL[h.er_status]}</option>)}
             </select>
             <ReasonAction label="انتقال" required={false} onSubmit={async (reason) => { await status("transported", { hospital_id: hospital, reason }); setOpen(false); await onDone(); }} />
-            <button className="btn ghost small" onClick={() => setOpen(false)}>انصراف</button>
+            <button className="btn ghost small" onClick={() => setOpen(false)}><Act>انصراف</Act></button>
             <ErrorBox error={act.error} />
           </div>
-        ) : <button className="btn small" onClick={() => setOpen(true)}>انتقال</button>
+        ) : <button className="btn small" onClick={() => setOpen(true)}><Act>انتقال</Act></button>
       )}
-      {c.status === "transported" && <button className="btn small" disabled={act.busy} onClick={() => act.run(async () => { await status("admitted"); await onDone(); })}>پذیرش و بستری</button>}
+      {c.status === "transported" && <button className="btn small" disabled={act.busy} onClick={() => act.run(async () => { await status("admitted"); await onDone(); })}><Act>پذیرش و بستری</Act></button>}
       {["on_scene", "transported", "admitted"].includes(c.status) && (
         <>
           <ReasonAction label="ترخیص" required={false} onSubmit={async (reason) => { await status("released", { reason }); await onDone(); }} />
@@ -185,7 +186,7 @@ export function IncidentCasualties({ incidentId, location, active }: { incidentI
   const items = list.data?.items ?? [];
 
   return (
-    <Section title="مصدومان" actions={<Link className="btn small ghost" to="/hospitals">ظرفیت بیمارستان‌ها</Link>}>
+    <Section title="مصدومان" actions={<Link className="btn small ghost" to="/hospitals"><Act>ظرفیت بیمارستان‌ها</Act></Link>}>
       <ErrorBox error={list.error} />
       <div className="row gap wrap">
         {TRIAGE.map((x) => <span key={x} className={`badge badge-${x}`}>{t(x)}: {num(list.data?.by_triage[x] ?? 0)}</span>)}
@@ -239,7 +240,7 @@ export function IncidentCasualties({ incidentId, location, active }: { incidentI
             {Object.entries(SEX).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label>شماره برچسب (اختیاری)<input value={f.tag_no} onChange={(e) => setF({ ...f, tag_no: e.target.value })} dir="ltr" maxLength={20} style={{ width: 110 }} /></label>
           <label>یادداشت پزشکی<input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} maxLength={500} /></label>
-          <button className="btn primary" disabled={act.busy || !f.triage}>ثبت مصدوم</button>
+          <button className="btn primary" disabled={act.busy || !f.triage}><Act>ثبت مصدوم</Act></button>
           <span className="muted small">نام و کد ملی ثبت نمی‌شود؛ شماره برچسب تریاژ بیمار را دنبال می‌کند.</span>
         </form>
       )}

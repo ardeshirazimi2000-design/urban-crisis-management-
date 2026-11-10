@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Act } from "../components/Act";
 import { api, newKey } from "../lib/api";
 import { num, REPORT_TYPES, t } from "../lib/format";
 import { ErrorBox, Section, useAction } from "../components/ui";
@@ -49,7 +50,7 @@ export function PhoneReportForm({ onCreated, onClose }: { onCreated: (id: string
     });
 
   return (
-    <Section title="ثبت گزارش تماس تلفنی" actions={<button className="btn ghost small" onClick={onClose}>بستن</button>}>
+    <Section title="ثبت گزارش تماس تلفنی" actions={<button className="btn ghost small" onClick={onClose}><Act>بستن</Act></button>}>
       {done && (
         <div className="banner info" role="status">
           گزارش ثبت شد و در صف بررسی قرار گرفت.
@@ -110,7 +111,7 @@ export function PhoneReportForm({ onCreated, onClose }: { onCreated: (id: string
         </fieldset>
 
         <ErrorBox error={act.error} />
-        <button className="btn primary" disabled={act.busy || !point || !f.type}>{act.busy ? "در حال ثبت…" : "ثبت گزارش"}</button>
+        <button className="btn primary" disabled={act.busy || !point || !f.type}><Act>{act.busy ? "در حال ثبت…" : "ثبت گزارش"}</Act></button>
       </form>
     </Section>
   );

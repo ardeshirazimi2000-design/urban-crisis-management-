@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Act } from "../components/Act";
 import { api, ApiError, type AccessHistory } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, num } from "../lib/format";
@@ -29,7 +30,7 @@ export function SessionsTable({ items, current, onRevoke }: { items: SessionRow[
             <td>{fmtTime(s.created_at)}</td>
             <td>{fmtTime(s.last_seen_at)}</td>
             <td>{s.revoked_at ? `پایان: ${REVOKE_REASONS[s.revoked_reason ?? ""] ?? s.revoked_reason}` : new Date(s.expires_at) < new Date() ? "منقضی" : "فعال"}</td>
-            <td>{onRevoke && !s.revoked_at && s.id !== current && <button className="btn small danger" onClick={() => onRevoke(s.id)}>ابطال</button>}</td>
+            <td>{onRevoke && !s.revoked_at && s.id !== current && <button className="btn small danger" onClick={() => onRevoke(s.id)}><Act>ابطال</Act></button>}</td>
           </tr>
         ))}
       </tbody>
@@ -58,7 +59,7 @@ export function ChangePasswordForm({ forced, onDone }: { forced?: boolean; onDon
       <label>رمز فعلی<input type="password" autoComplete="current-password" dir="ltr" required value={cur} onChange={(e) => setCur(e.target.value)} /></label>
       <label>رمز جدید<input type="password" autoComplete="new-password" dir="ltr" required value={next} onChange={(e) => setNext(e.target.value)} /></label>
       <label>تکرار رمز جدید<input type="password" autoComplete="new-password" dir="ltr" required value={again} onChange={(e) => setAgain(e.target.value)} /></label>
-      <button className="btn primary" disabled={busy}>تغییر رمز</button>
+      <button className="btn primary" disabled={busy}><Act>تغییر رمز</Act></button>
       {ok && <div className="banner info">رمز عبور تغییر کرد. نشست‌های دیگر شما خاتمه یافت.</div>}
       <ErrorBox error={error} />
     </form>
@@ -73,7 +74,7 @@ export function ForcedPasswordChange() {
       <div className="card narrow">
         <h1>تغییر رمز عبور</h1>
         <ChangePasswordForm forced onDone={() => void reload()} />
-        <button className="btn ghost small" onClick={logout}>خروج</button>
+        <button className="btn ghost small" onClick={logout}><Act>خروج</Act></button>
       </div>
     </div>
   );

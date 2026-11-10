@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { Act } from "../components/Act";
 import { api, ApiError, download, saveBlob } from "../lib/api";
 import { useSession } from "../lib/session";
 import { fmtTime, num, t } from "../lib/format";
@@ -103,8 +104,8 @@ function SettingValue({ s, onSave }: { s: Setting; onSave: (v: unknown, reason: 
           });
         }}>
           <input placeholder="دلیل" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button className="btn small primary" disabled={act.busy}>ثبت</button>
-          <button type="button" className="btn small ghost" onClick={() => setDraft(JSON.stringify(s.value))}>لغو</button>
+          <button className="btn small primary" disabled={act.busy}><Act>ثبت</Act></button>
+          <button type="button" className="btn small ghost" onClick={() => setDraft(JSON.stringify(s.value))}><Act>لغو</Act></button>
         </form>)}
         {!s.editable && <span className="muted small">{s.managed_by === "audit:configure" ? "توسط ممیز" : "توسط مدیر امنیت"}</span>}
         <ErrorBox error={act.error} />
@@ -134,7 +135,7 @@ function Integrity() {
   const act = useAction();
   const [res, setRes] = useState<IntegrityResult | null>(null);
   return (
-    <Section title="صحت داده‌ها" actions={<button className="btn small" disabled={act.busy} onClick={() => void act.run(async () => setRes(await api("POST", "/admin/integrity/check")))}>بررسی صحت</button>}>
+    <Section title="صحت داده‌ها" actions={<button className="btn small" disabled={act.busy} onClick={() => void act.run(async () => setRes(await api("POST", "/admin/integrity/check")))}><Act>بررسی صحت</Act></button>}>
       <p className="muted small">حوادث و هشدارها با مهر HMAC محافظت می‌شوند و زنجیره ممیزی بازمحاسبه می‌شود. بررسی خودکار هم به‌طور دوره‌ای انجام می‌شود.</p>
       <ErrorBox error={act.error} />
       {res && <IntegritySummary r={res} />}
@@ -204,9 +205,9 @@ function Audit() {
   const set = (k: string, v: string) => setF({ ...f, [k]: v });
   return (
     <Section title="لاگ ممیزی (زنجیره HMAC، فقط‌افزودنی)" actions={<>
-      <button className="btn small" onClick={() => verify.run(async () => setResult(await api("GET", "/admin/audit/verify")))}>بررسی زنجیره</button>
-      <button className="btn small" onClick={() => exportAs("csv")}>خروجی CSV</button>
-      <button className="btn small" onClick={() => exportAs("json")}>خروجی JSON</button>
+      <button className="btn small" onClick={() => verify.run(async () => setResult(await api("GET", "/admin/audit/verify")))}><Act>بررسی زنجیره</Act></button>
+      <button className="btn small" onClick={() => exportAs("csv")}><Act>خروجی CSV</Act></button>
+      <button className="btn small" onClick={() => exportAs("json")}><Act>خروجی JSON</Act></button>
     </>}>
       {result && <ChainStatus r={result} onChange={setResult} />}
       <ErrorBox error={verify.error ?? rows.error} />
